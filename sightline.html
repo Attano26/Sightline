@@ -5180,7 +5180,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-o";
+const BUILD = "2026-08-26-p";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -6178,7 +6178,7 @@ function localSmallTalk(text, ws) {
     open = pickSay(kind, text);
     if (kind.id === "greeting" && who) open = open.replace(/[.!]$/, ", " + who + ".");
   } else if (OFF_TOPIC.test(text)) {
-    open = "Ha. I am better at aluminium than I am at that.";
+    open = "I have no way to know that, and no way to look it up. Aluminium I can help with.";
   } else {
     open = "I am not sure there is a decision in that one yet.";
   }
@@ -6212,7 +6212,9 @@ const CHAT_SCHEMA = {
 function chatPrompt(ws, kind) {
   const framing = kind === "off topic"
     ? "They have said something social or off topic. Acknowledge it lightly and with good humour, " +
-      "without pretending to be a general purpose assistant, then turn to what they might want."
+      "without pretending to be a general purpose assistant, then turn to what they might want. " +
+      "If what they asked has a factual answer you cannot possibly hold, say plainly that you " +
+      "cannot know it. Being unable to answer is the joke, not a problem to talk around."
     : kind === "greeting"
       ? "They have greeted you or asked how you are. Answer that first, briefly and warmly."
       : "They have asked something real, but too broad or too vague to simulate as it stands. " +
@@ -6221,6 +6223,13 @@ function chatPrompt(ws, kind) {
 
   return "You are the front door of a market simulator for the facade and fenestration industry." + NL +
     framing + NL + NL +
+    "ANSWER WHAT THEY ACTUALLY SAID. Read their exact words and respond to those. Somebody who asked" + NL +
+    "for a joke has not asked how you are, and being met with " + QL + "I am doing well, thank you" + QR + " reads as" + NL +
+    "not having been listened to. Refer to the specific thing they said before moving on." + NL + NL +
+    "YOU CANNOT LOOK ANYTHING UP. You have no web access, no weather, no news, no prices, no today." + NL +
+    "Never state a current fact about the world. If they ask for one, say you have no way to know it." + NL +
+    "Saying " + QL + "it is warm and pleasant in Bengaluru today" + QR + " when you cannot see outside is a lie," + NL +
+    "however friendly it sounds, and it is exactly what this whole product exists to avoid." + NL + NL +
     "Reply warmly and briefly, as a knowledgeable colleague would. Never tell them they are wrong, never" + NL +
     "say the word " + QL + "decision" + QR + " back at them as a correction, and never explain your own rules." + NL +
     "Then invite them to say more about what they are weighing up." + NL + NL +
