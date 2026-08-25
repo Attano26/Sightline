@@ -131,7 +131,18 @@ button{cursor:pointer;background:none;border:none;padding:0}
 ::-webkit-scrollbar-thumb:hover{background:var(--ink-3);background-clip:content-box}
 
 /* ---------- shell ---------- */
-.app{display:flex;height:100dvh;overflow:hidden}
+/* One source of truth for how tall the app is.
+
+   dvh was not enough. On a first launch Android resolves it once against a
+   viewport it is still settling, and because nothing it considers a resize
+   ever happens afterwards, the stale value stands until the app is killed
+   and relaunched. That is exactly the shape of the bug: broken once per
+   launch, fixed by a cold start.
+
+   --apph is written from visualViewport, which reports what is actually
+   visible right now, and is rewritten whenever that changes. dvh stays as
+   the fallback for the first frames and for anything without the API. */
+.app{display:flex;height:100dvh;height:var(--apph,100dvh);overflow:hidden}
 
 .rail{
   width:290px;flex:0 0 290px;background:var(--surface);
@@ -444,7 +455,7 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 @keyframes fi{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
 
 /* ---------- composer ---------- */
-.composer{flex:0 0 auto;padding:10px 24px calc(18px + env(safe-area-inset-bottom));background:var(--paper)}
+.composer{flex:0 0 auto;padding:10px 24px max(calc(18px + env(safe-area-inset-bottom)),calc(18px + var(--safeb,0px)));background:var(--paper)}
 .compin{max-width:748px;margin:0 auto}
 .moderow{display:flex;gap:8px;align-items:center;margin-bottom:10px}
 .modebtn{
@@ -1265,7 +1276,7 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
   .streamin{padding:22px 18px 30px;gap:22px}
   .topbar{padding:12px 16px;min-height:58px}
   .topmeta{display:none}
-  .composer{padding:8px 16px calc(14px + env(safe-area-inset-bottom))}
+  .composer{padding:8px 16px max(calc(14px + env(safe-area-inset-bottom)),calc(14px + var(--safeb,0px)))}
   .cbar{padding:16px 18px 0}
   .cbody{padding:12px 18px 4px}
   .sect{padding:16px 18px 0}
@@ -4956,6 +4967,11 @@ function applyProfile(ws, id, md) {
 
    Anyone self hosting on a different origin can still set their own in Settings,
    which is why the override below survives. */
+/* Bumped with the service worker on every deploy, and shown in Settings, About.
+   It is the only way to tell a bug in the new version from an old version still
+   sitting in a cache. */
+const BUILD = "2026-08-26-e";
+
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
 /* Shipped first, and the stored one only as a fallback.
@@ -5557,10 +5573,53 @@ function pageData(s) {
 }
 
 /* ---------- About ---------- */
+/* Which build is running, and what this device thinks its own screen is.
+
+   Both exist because a layout bug on a phone I cannot open a console on was
+   being debugged by guessing. A screenshot of this is evidence; a description of
+   a symptom is not. The build stamp settles the other recurring question, which
+   is whether the version being described is the version that was just shipped. */
+function pageDiag(s) {
+  const vv = window.visualViewport;
+  const cs = getComputedStyle(document.documentElement);
+  const rows = [
+    ["Build", BUILD],
+    ["Window", window.innerWidth + " by " + window.innerHeight],
+    ["Visible viewport", vv ? Math.round(vv.width) + " by " + Math.round(vv.height) : "not reported"],
+    ["Applied height", cs.getPropertyValue("--apph").trim() || "falling back to dvh"],
+    ["Measured bottom gap", cs.getPropertyValue("--safeb").trim() || "0px"],
+    ["Safe area, reported", getComputedStyle(document.body).getPropertyValue("padding-bottom") || "n/a"],
+    ["Pixel ratio", String(window.devicePixelRatio || 1)],
+    ["Standalone", (matchMedia("(display-mode: standalone)").matches ? "yes" : "no")],
+    ["Composer bottom", (() => {
+      const t = document.querySelector("#ta");
+      if (!t) return "n/a";
+      const b = t.getBoundingClientRect().bottom;
+      const lim = vv ? vv.height : window.innerHeight;
+      return Math.round(b) + " of " + Math.round(lim) + (b > lim + 1 ? "  OFF SCREEN" : "  visible");
+    })()]
+  ];
+  const w = el("div", "fld");
+  w.appendChild(el("label", "", "This device"));
+  const box = el("div", "confbox");
+  box.innerHTML = "<ul>" + rows.map(r =>
+    "<li><b>" + esc(r[0]) + ":</b> " + esc(String(r[1])) + "</li>").join("") + "</ul>";
+  w.appendChild(box);
+  const cp = el("button", "btn", "Copy this");
+  cp.onclick = () => {
+    const txt = rows.map(r => r[0] + ": " + r[1]).join("\n");
+    navigator.clipboard.writeText(txt).then(() => toast("Copied. Paste it to whoever is fixing it."),
+      () => toast("Could not copy here"));
+  };
+  w.appendChild(cp);
+  s.appendChild(w);
+}
+
 function pageAbout(s) {
   const n = el("div", "notice");
   n.innerHTML = "<span>Sightline works out how people react to a decision in the facade and fenestration industry. You describe a move, it works out who responds, what they do, and what that turns into a few months later.</span>";
   s.appendChild(n);
+  pageDiag(s);
 
   const w = el("div", "fld");
   w.appendChild(el("label", "", "What it will not do"));
@@ -6137,24 +6196,65 @@ function watchForUpdates() {
    document laid out against, so on a browser where dvh already behaves this does
    nothing at all. Runs again on resize and on the first few frames after launch,
    which is the window in which the chrome retracts. */
-function trackViewport() {
+/* Keep the app the size of what is actually on screen.
+
+   The previous version of this only acted when it caught the viewport
+   disagreeing with the document by more than two pixels, and on a first launch
+   that check simply never fired, so the composer stayed half under the edge of
+   the screen until the app was killed and reopened.
+
+   This one does not test for disagreement. visualViewport is the authority on
+   what is visible, so its height is written straight out and rewritten whenever
+   it changes. That also makes the on screen keyboard behave: the app shrinks to
+   the space above it and the composer rides up rather than being covered.
+
+   The rAF pass exists because a first launch settles over several frames and
+   fires no event that any listener here would catch. It runs for two seconds
+   and stops as soon as the number holds still. */
+let vpLast = 0;
+function applyViewport() {
   const vv = window.visualViewport;
-  if (!vv) return;
-  const apply = () => {
-    const h = Math.round(vv.height);
-    const off = Math.abs(h - document.documentElement.clientHeight);
-    if (off > 2) {
-      document.documentElement.style.setProperty("--vvh", h + "px");
-      document.documentElement.classList.add("vvh");
-    } else {
-      document.documentElement.classList.remove("vvh");
-    }
+  const h = Math.round(vv ? vv.height : window.innerHeight);
+  if (!h) return false;
+  // Always write it. An earlier version returned early when the measurement
+  // matched what it last saw, which meant a wrong height applied from anywhere
+  // else was never corrected: the tracker had cached the very state it exists to
+  // fix. The return value still reports whether the number moved, because the
+  // settle loop below needs that to know when to stop, but it no longer decides
+  // whether anything gets applied.
+  document.documentElement.style.setProperty("--apph", h + "px");
+  // env(safe-area-inset-bottom) can read zero on the first paint, which on a
+  // gesture navigation phone is what puts the composer under the system bar.
+  // The gap between the window and the visible viewport is the same distance,
+  // measured rather than declared.
+  const gap = Math.max(0, Math.round(window.innerHeight - h));
+  document.documentElement.style.setProperty("--safeb", (gap > 2 ? gap : 0) + "px");
+  const moved = h !== vpLast;
+  vpLast = h;
+  return moved;
+}
+
+function trackViewport() {
+  applyViewport();
+  const vv = window.visualViewport;
+  if (vv) {
+    vv.addEventListener("resize", applyViewport);
+    vv.addEventListener("scroll", applyViewport);
+  }
+  window.addEventListener("resize", applyViewport);
+  window.addEventListener("orientationchange", () => setTimeout(applyViewport, 260));
+  // Coming back from the background is the other moment the numbers move.
+  window.addEventListener("pageshow", applyViewport);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) applyViewport(); });
+
+  const t0 = performance.now();
+  let steady = 0;
+  const settle = () => {
+    const changed = applyViewport();
+    steady = changed ? 0 : steady + 1;
+    if (steady < 12 && performance.now() - t0 < 2000) requestAnimationFrame(settle);
   };
-  vv.addEventListener("resize", apply);
-  window.addEventListener("orientationchange", () => setTimeout(apply, 240));
-  // The first launch is the case this exists for, so check across the frames in
-  // which the browser is still settling rather than only once.
-  [0, 60, 200, 500, 1000].forEach(d => setTimeout(apply, d));
+  requestAnimationFrame(settle);
 }
 
 function lockZoom() {
