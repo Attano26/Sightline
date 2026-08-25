@@ -4259,6 +4259,16 @@ function renderStream() {
   const c = activeChat();
   $("#topTitle").textContent = c ? c.title : "New simulation";
   updateCtxPill();
+  /* The composer's controls depend on which simulation is open, and the workspace
+     chooser only appears while starting a new one. Seven places clear activeChat
+     and only some refreshed the composer, so New simulation left the chooser
+     hidden with no way to reach it. This covers all of them, because they all
+     redraw the stream.
+
+     It has to sit ABOVE the early return: the no-chat branch is precisely the
+     one where the chooser is supposed to appear, and putting it after the loop
+     meant it never ran in that case. */
+  updateSend();
 
   if (!c) { renderWelcome(box); return; }
   c.turns.forEach(t => {
@@ -5243,7 +5253,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-t";
+const BUILD = "2026-08-26-u";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
