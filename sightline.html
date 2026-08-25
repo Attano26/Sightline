@@ -2385,8 +2385,49 @@ function probeStorage() {
    typing or sit idle holding a finished change. `AUTO_SYNC_MS` after the last
    edit is the whole rule, and Settings states it in those words rather than
    showing a countdown to something that does not exist. */
+/* Three ways to sync, because the right answer depends on what you are afraid of.
+
+   "instant" pushes a few seconds after you stop changing things. Safest: at most
+   a few seconds of work is ever only on this device.
+   "periodic" pushes at most once every SYNC_EVERY_MS, and only if something
+   actually changed. Quieter, at the cost of everything since the last push
+   living only here.
+   "manual" never pushes on its own.
+
+   The old boolean is read as instant or manual so nobody's setting changes
+   underneath them. */
 const AUTO_SYNC_MS = 4000;
-let autoSyncTimer = null, autoSyncAt = 0, autoSyncBusy = false;
+const SYNC_EVERY_MS = 5 * 60 * 60 * 1000;
+let autoSyncTimer = null, autoSyncAt = 0, autoSyncBusy = false, periodicTimer = null;
+
+function syncMode2() {
+  const g = S.gsync || {};
+  if (g.mode) return g.mode;
+  return g.auto === false ? "manual" : "instant";
+}
+
+function runAutoSync() {
+  autoSyncAt = 0; autoSyncBusy = true;
+  return gSync().then(r => { if (r && r.did === "conflict") setSyncBadge("conflict"); else setSyncBadge("ok"); })
+                .catch(() => setSyncBadge("error"))
+                .then(() => { autoSyncBusy = false; });
+}
+
+/* Periodic mode checks often and pushes rarely: the interval is a floor on how
+   old the copy in Drive may be, not a promise to wake the device every so often.
+   A phone with the app closed syncs when it is next opened, which is the only
+   thing a web app can do. */
+function startPeriodic() {
+  clearInterval(periodicTimer);
+  periodicTimer = setInterval(() => {
+    if (syncMode2() !== "periodic") return;
+    const g = S.gsync || {};
+    if (!clientId() || !g.token || autoSyncBusy) return;
+    if (!g.pendingSince) return;
+    if (Date.now() - (g.lastSync || 0) < SYNC_EVERY_MS) return;
+    runAutoSync();
+  }, 60000);
+}
 
 function save() {
   S.updatedAt = Date.now();   // what makes "which copy is newer" answerable
@@ -2394,15 +2435,14 @@ function save() {
   clearTimeout(autoSyncTimer);
   autoSyncAt = 0;
   const g = S.gsync;
-  if (g && clientId() && g.auto && g.token) {
-    // Quiet background push, well after the user has stopped typing.
-    autoSyncAt = Date.now() + AUTO_SYNC_MS;
-    autoSyncTimer = setTimeout(() => {
-      autoSyncAt = 0; autoSyncBusy = true;
-      gSync().then(r => { if (r && r.did === "conflict") setSyncBadge("conflict"); else setSyncBadge("ok"); })
-             .catch(() => setSyncBadge("error"))
-             .then(() => { autoSyncBusy = false; });
-    }, AUTO_SYNC_MS);
+  const mode = syncMode2();
+  if (g && clientId() && g.token && mode !== "manual") {
+    if (!g.pendingSince) g.pendingSince = Date.now();
+    if (mode === "instant") {
+      // Quiet background push, well after the user has stopped typing.
+      autoSyncAt = Date.now() + AUTO_SYNC_MS;
+      autoSyncTimer = setTimeout(runAutoSync, AUTO_SYNC_MS);
+    }
   }
   saveTimer = setTimeout(() => {
     if (storageState === "blocked") { showStorageBanner(); return; }
@@ -4717,7 +4757,7 @@ function openTour(startAt) {
     b.onclick = async () => {
       b.disabled = true; lbl.textContent = "Waiting for Google…";
       try {
-        await gSignIn(true);
+        await gEnsureToken();
         const r = await gSync();
         // A returning person's data comes back right here, which is the whole
         // reason sign in sits before the two screens that ask them to type.
@@ -5203,7 +5243,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-q";
+const BUILD = "2026-08-26-s";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -5297,7 +5337,7 @@ async function gSignIn(interactive) {
           const t = (e && e.type) || "";
           if (t === "popup_closed") return rej(new Error("Sign in was closed before it finished."));
           if (t === "popup_failed_to_open") return rej(new Error("The sign in window was blocked. Allow popups for this site and try again."));
-          rej(new Error("Google refused the sign in. If its page said 401 invalid_client, the OAuth client is almost certainly not of type Web application, or you pasted the client secret instead of the client ID. The setup notes above cover both."));
+          rej(new Error("Google refused the sign in."));
         }
       });
       tokenClient.requestAccessToken({ prompt: interactive ? "consent" : "" });
@@ -5305,8 +5345,25 @@ async function gSignIn(interactive) {
   });
 }
 
+/* Renew quietly, and only ask when quiet fails.
+
+   A browser only OAuth flow issues a token that lasts about an hour and carries
+   no refresh token, so it genuinely has to be renewed. It does not have to be
+   seen. With consent already granted and a live Google session, prompt:"" hands
+   back a new token with no interface at all.
+
+   Every visible entry point was calling gSignIn(true), which forces the consent
+   screen whether or not it is needed, so a one hour expiry looked like a login
+   wall on every sync. Silent first, interactive only if that genuinely fails. */
+async function gEnsureToken() {
+  const t = gToken();
+  if (t) return t;
+  try { return await gSignIn(false); }
+  catch (e) { return await gSignIn(true); }
+}
+
 async function gFetch(url, opts) {
-  const t = gToken() || await gSignIn(false);
+  const t = gToken() || await gEnsureToken();
   const o = Object.assign({}, opts || {});
   o.headers = Object.assign({ Authorization: "Bearer " + t }, o.headers || {});
   const r = await fetch(url, o);
@@ -5349,6 +5406,7 @@ async function gPush() {
     method:"PATCH", headers:{ "Content-Type":"application/json" }, body
   });
   g.lastSync = Date.now(); g.lastPulledAt = S.updatedAt || 0;
+  g.pendingSince = 0;   // nothing is waiting any more
   save(); return body.length;
 }
 
@@ -5602,7 +5660,7 @@ function pageSync(s) {
     if (!clientId()) { out.innerHTML = ""; const e2 = el("div", "err"); e2.innerHTML = "<b>Sign in is not configured for this copy.</b> The setup notes above cover it."; out.appendChild(e2); return; }
     bIn.textContent = "Working…"; bIn.disabled = true; out.innerHTML = "";
     try {
-      if (!gToken()) await gSignIn(true);
+      if (!gToken()) await gEnsureToken();
       const r = await gSync();
       if (r.did === "conflict") { renderConflict(out, r); }
       else {
@@ -5745,9 +5803,16 @@ function syncTail(s, g, row, out) {
   const au = el("div", "fld");
   au.appendChild(el("label", "", "When to sync"));
   const arow = el("div", "clopts");
-  [[true, "Automatically"], [false, "Only when I press it"]].forEach(([v, lb]) => {
-    const b = el("button", "clopt" + (!!g.auto === v ? " on" : ""), lb);
-    b.onclick = () => { g.auto = v; save(); openSettingsPage("sync"); };
+  const cur = syncMode2();
+  [["instant", "After every change"],
+   ["periodic", "Every five hours"],
+   ["manual", "Only when I press it"]].forEach(([v, lb]) => {
+    const b = el("button", "clopt" + (cur === v ? " on" : ""), lb);
+    b.onclick = () => {
+      g.mode = v;
+      g.auto = v !== "manual";   // kept so an older copy of the app still reads this
+      save(); startPeriodic(); openSettingsPage("sync");
+    };
     arow.appendChild(b);
   });
   au.appendChild(arow);
@@ -5764,8 +5829,16 @@ function syncTail(s, g, row, out) {
   const paintLive = () => {
     const gs = gsync();
     const bits = [];
-    if (!gs.auto) bits.push('<span class="cidot idle"></span>Automatic sync is off. Nothing goes up until you press <b>Sync now</b>.');
+    const m = syncMode2();
+    if (m === "manual") bits.push('<span class="cidot idle"></span>Automatic sync is off. Nothing goes up until you press <b>Sync now</b>.');
     else if (autoSyncBusy) bits.push('<span class="cidot go"></span>Sending to Drive now.');
+    else if (m === "periodic") {
+      const due = (gs.lastSync || 0) + SYNC_EVERY_MS - Date.now();
+      bits.push(gs.pendingSince
+        ? '<span class="cidot go"></span>Changes are waiting. Next push ' +
+          (due <= 0 ? "within a minute" : "in about <b>" + Math.max(1, Math.round(due / 3600000)) + " hours</b>") + "."
+        : '<span class="cidot ok"></span>Everything here is on Drive.');
+    }
     else if (autoSyncAt) {
       const left = Math.max(0, Math.ceil((autoSyncAt - Date.now()) / 1000));
       bits.push('<span class="cidot go"></span>A change is waiting. Going up in <b>' + left + (left === 1 ? " second" : " seconds") + "</b>.");
@@ -5789,7 +5862,10 @@ function syncTail(s, g, row, out) {
     paintLive();
   }, 1000);
   const syncHint = el("div", "hint");
-  syncHint.innerHTML = "<b>Automatically</b> means four seconds after your last change, not on a schedule. A fixed clock would either interrupt you mid edit or sit on a finished change. Your Gemini key is deliberately left out of the sync, so nobody can spend your quota.";
+  syncHint.innerHTML = "<b>After every change</b> pushes a few seconds after you stop, so at most a few seconds of work is ever only on this device. " +
+    "<b>Every five hours</b> is quieter, and the price is that everything since the last push lives only here, so clearing site data would lose it. " +
+    "Either way it only pushes when something actually changed, and only while the app is open. " +
+    "Your Gemini key is deliberately left out of the sync, so nobody can spend your quota.";
   au.appendChild(syncHint);
   s.appendChild(au);
 }
@@ -6838,7 +6914,7 @@ const closeRail = () => { $("#rail").classList.remove("open"); $("#backdrop").cl
 function boot() {
   load();
   if (S.theme) document.documentElement.setAttribute("data-theme", S.theme);
-  probeStorage(); showStorageBanner(); watchForUpdates(); lockZoom(); trackViewport();
+  probeStorage(); showStorageBanner(); watchForUpdates(); lockZoom(); trackViewport(); startPeriodic();
   if (!S.tourDone && !S.chats.length) setTimeout(() => openTour(0), 400);
   syncMode(); renderRail(); renderStream(); updateSend();
 
