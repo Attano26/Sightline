@@ -884,6 +884,13 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .ubbtn.ghost:hover{background:var(--surface);opacity:1}
 @media(max-width:899px){.updatebar{padding:12px 16px}}
 
+
+.syncdot{width:7px;height:7px;border-radius:50%;margin-left:auto;flex:0 0 auto;background:var(--ink-3)}
+.syncdot.ok{background:var(--accent)}
+.syncdot.syncing{background:var(--sev-med);animation:pl 1.2s ease-in-out infinite}
+.syncdot.conflict{background:var(--sev-med)}
+.syncdot.error{background:var(--sev-high)}
+
 /* ---------- responsive ---------- */
 .backdrop{display:none}
 @media(max-width:899px){
@@ -935,6 +942,10 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
       <button class="railbtn" id="btnNewWs">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 013.5 3h2.8l1.2 1.6h5A1.5 1.5 0 0114 6.1v5.4A1.5 1.5 0 0112.5 13h-9A1.5 1.5 0 012 11.5v-7z" stroke="currentColor" stroke-width="1.3"/></svg>
         New workspace
+      </button>
+      <button class="railbtn" id="btnSync" hidden>
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 7A5.5 5.5 0 003.6 4.2M2.5 9A5.5 5.5 0 0012.4 11.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13.8 2.6v3.2h-3.2M2.2 13.4v-3.2h3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="syncLabel">Synced</span><span class="syncdot" id="syncDot"></span>
       </button>
       <button class="railbtn" id="btnSettings">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.6v1.8M8 12.6v1.8M14.4 8h-1.8M3.4 8H1.6M12.5 3.5l-1.3 1.3M4.8 11.2l-1.3 1.3M12.5 12.5l-1.3-1.3M4.8 4.8L3.5 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
@@ -1825,8 +1836,19 @@ function probeStorage() {
   return storageState;
 }
 
+let autoSyncTimer = null;
 function save() {
+  S.updatedAt = Date.now();   // what makes "which copy is newer" answerable
   clearTimeout(saveTimer);
+  clearTimeout(autoSyncTimer);
+  const g = S.gsync;
+  if (g && g.clientId && g.auto && g.token) {
+    // Quiet background push, well after the user has stopped typing.
+    autoSyncTimer = setTimeout(() => {
+      gSync().then(r => { if (r && r.did === "conflict") setSyncBadge("conflict"); else setSyncBadge("ok"); })
+             .catch(() => setSyncBadge("error"));
+    }, 4000);
+  }
   saveTimer = setTimeout(() => {
     if (storageState === "blocked") { showStorageBanner(); return; }
     try {
@@ -4026,6 +4048,176 @@ function applyProfile(ws, id, md) {
         Object.keys(p.behaviour).length + " behaviour answers");
 }
 
+/* ============================================================
+   GOOGLE DRIVE SYNC
+
+   The data lives in the user's own Drive, in a private folder
+   that only this app can see. There is no server here and there
+   never will be. Google handles who you are, Drive handles where
+   things go, and nothing passes through anything of mine.
+
+   Two deliberate exclusions from what gets synced:
+     the Gemini key, because an API key does not belong in a file
+     that travels, even a private one, and
+     the access token, which is short lived and device specific.
+
+   Conflicts are resolved by asking. Silently overwriting a day of
+   someone's work to avoid a dialogue is not a trade worth making.
+   ============================================================ */
+const GDRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
+const GDRIVE_FILE = "sightline-data.json";
+let gisReady = false, tokenClient = null;
+
+function gsync() { return (S.gsync = S.gsync || { clientId:"", auto:true, fileId:"", lastSync:0, lastPulledAt:0 }); }
+
+/* What travels. Everything about your work, nothing about your credentials. */
+function syncPayload() {
+  return {
+    v: 1,
+    updatedAt: S.updatedAt || 0,
+    theme: S.theme || "",
+    mode: S.mode,
+    workspaces: S.workspaces,
+    chats: S.chats,
+    signals: S.signals
+  };
+}
+function applyPayload(p) {
+  if (!p || !Array.isArray(p.workspaces) || !p.workspaces.length) return false;
+  S.workspaces = p.workspaces;
+  S.chats = Array.isArray(p.chats) ? p.chats : [];
+  S.signals = Array.isArray(p.signals) ? p.signals : [];
+  if (p.mode) S.mode = p.mode;
+  S.updatedAt = p.updatedAt || 0;
+  if (!S.workspaces.some(w => w.id === S.activeWs)) S.activeWs = S.workspaces[0].id;
+  if (!S.chats.some(c => c.id === S.activeChat)) S.activeChat = null;
+  repairText(S);
+  return true;
+}
+
+function loadGIS() {
+  if (gisReady) return Promise.resolve(true);
+  if (location.protocol !== "https:" && location.hostname !== "localhost") return Promise.resolve(false);
+  return new Promise(res => {
+    const sc = document.createElement("script");
+    sc.src = "https://accounts.google.com/gsi/client";
+    sc.async = true; sc.defer = true;
+    sc.onload = () => { gisReady = true; res(true); };
+    sc.onerror = () => res(false);
+    document.head.appendChild(sc);
+    setTimeout(() => res(gisReady), 8000);
+  });
+}
+
+function gToken() {
+  const g = gsync();
+  return (g.token && g.tokenExp && Date.now() < g.tokenExp - 60000) ? g.token : null;
+}
+
+async function gSignIn(interactive) {
+  const g = gsync();
+  if (!g.clientId) throw new Error("No client ID set. Add one in Settings first.");
+  const ok = await loadGIS();
+  if (!ok || !window.google || !google.accounts) throw new Error("Could not reach Google sign in. Check your connection, or an extension may be blocking it.");
+  return new Promise((res, rej) => {
+    try {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: g.clientId,
+        scope: GDRIVE_SCOPE,
+        callback: r => {
+          if (r && r.access_token) {
+            g.token = r.access_token;
+            g.tokenExp = Date.now() + ((r.expires_in || 3600) * 1000);
+            save(); res(g.token);
+          } else rej(new Error("Google did not return access."));
+        },
+        error_callback: e => rej(new Error((e && e.type === "popup_closed") ? "Sign in was closed before it finished." : "Google sign in failed."))
+      });
+      tokenClient.requestAccessToken({ prompt: interactive ? "consent" : "" });
+    } catch (e) { rej(e); }
+  });
+}
+
+async function gFetch(url, opts) {
+  const t = gToken() || await gSignIn(false);
+  const o = Object.assign({}, opts || {});
+  o.headers = Object.assign({ Authorization: "Bearer " + t }, o.headers || {});
+  const r = await fetch(url, o);
+  if (r.status === 401) { gsync().token = ""; throw new Error("Google signed you out. Sign in again."); }
+  if (!r.ok) {
+    let m = "";
+    try { const j = await r.json(); m = (j.error && j.error.message) || ""; } catch (e) {}
+    throw new Error(m || ("Drive returned " + r.status));
+  }
+  return r;
+}
+
+async function gFindFile() {
+  const g = gsync();
+  const r = await gFetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name,modifiedTime)&pageSize=20");
+  const j = await r.json();
+  const f = (j.files || []).find(x => x.name === GDRIVE_FILE);
+  g.fileId = f ? f.id : "";
+  return f || null;
+}
+
+async function gPush() {
+  const g = gsync();
+  if (!g.fileId) {
+    await gFindFile();
+    if (!g.fileId) {
+      const r = await gFetch("https://www.googleapis.com/drive/v3/files", {
+        method:"POST", headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ name: GDRIVE_FILE, parents:["appDataFolder"] })
+      });
+      g.fileId = (await r.json()).id;
+    }
+  }
+  const body = JSON.stringify(syncPayload());
+  await gFetch("https://www.googleapis.com/upload/drive/v3/files/" + g.fileId + "?uploadType=media", {
+    method:"PATCH", headers:{ "Content-Type":"application/json" }, body
+  });
+  g.lastSync = Date.now(); g.lastPulledAt = S.updatedAt || 0;
+  save(); return body.length;
+}
+
+async function gPull() {
+  const g = gsync();
+  const f = await gFindFile();
+  if (!f) return null;
+  const r = await gFetch("https://www.googleapis.com/drive/v3/files/" + g.fileId + "?alt=media");
+  const txt = await r.text();
+  try { return JSON.parse(txt); } catch (e) { throw new Error("The file in Drive could not be read."); }
+}
+
+/* Decide what to do, and ask when the answer is genuinely ambiguous. */
+async function gSync(opts) {
+  const g = gsync();
+  const remote = await gPull();
+  const localAt = S.updatedAt || 0;
+  const remoteAt = remote ? (remote.updatedAt || 0) : -1;
+
+  if (!remote) { const n = await gPush(); return { did:"pushed", bytes:n, reason:"nothing was in Drive yet" }; }
+  if (remoteAt === localAt) { g.lastSync = Date.now(); save(); return { did:"same", reason:"both copies already match" }; }
+
+  const localChangedSincePull = localAt > (g.lastPulledAt || 0);
+  if (remoteAt > localAt && !localChangedSincePull) {
+    applyPayload(remote); g.lastSync = Date.now(); g.lastPulledAt = S.updatedAt || 0; save();
+    return { did:"pulled", reason:"Drive was newer and nothing here had changed" };
+  }
+  if (localAt > remoteAt && !(remote && remoteAt > (g.lastPulledAt || 0))) {
+    const n = await gPush(); return { did:"pushed", bytes:n, reason:"this device was newer" };
+  }
+  if (opts && opts.resolve === "mine") { const n = await gPush(); return { did:"pushed", bytes:n, reason:"you chose this device" }; }
+  if (opts && opts.resolve === "theirs") {
+    applyPayload(remote); g.lastSync = Date.now(); g.lastPulledAt = S.updatedAt || 0; save();
+    return { did:"pulled", reason:"you chose the Drive copy" };
+  }
+  return { did:"conflict", localAt, remoteAt,
+           localCounts:{ w:S.workspaces.length, c:S.chats.length },
+           remoteCounts:{ w:(remote.workspaces||[]).length, c:(remote.chats||[]).length } };
+}
+
 function openSettings() {
   openSheet("Settings", s => {
     const f = el("div", "fld");
@@ -4110,9 +4302,111 @@ function openSettings() {
     n.innerHTML = "<span><b>Cost.</b> This app never uses web search, which is where the expense normally sits. A simulation is a few thousand tokens, a fraction of a rupee, and free on Google's free tier.</span>";
     s.appendChild(n);
 
+    /* ---- Google Drive sync ---- */
+    const g = gsync();
+    const sy = el("div", "fld");
+    sy.appendChild(el("label", "", "Sync with Google Drive"));
+    const syOut = el("div");
+
+    const canSync = location.protocol === "https:" || location.hostname === "localhost";
+    if (!canSync) {
+      const n = el("div", "notice");
+      n.innerHTML = "<span><b>Not available here.</b> Google refuses sign in from a file opened directly or from a preview. Open the hosted version and this appears.</span>";
+      sy.appendChild(n);
+      s.appendChild(sy);
+    } else {
+      const setup = el("details", "gaps"); setup.style.borderTop = "none";
+      const sm = el("summary");
+      sm.appendChild(el("span", "tw", QL === QL ? "›" : ""));
+      sm.appendChild(el("span", "", g.clientId ? "Change the Google setup" : "First, a five minute setup on Google"));
+      setup.appendChild(sm);
+      const steps = el("div", "gaplist");
+      const st = el("div", "confbox");
+      st.innerHTML =
+        "<b>You do this once, in your own Google account.</b><ul>" +
+        "<li>Go to <b>console.cloud.google.com</b> and pick the project your Gemini key already lives in.</li>" +
+        "<li>Open <b>APIs and Services</b>, then <b>Library</b>. Search for <b>Google Drive API</b> and press Enable.</li>" +
+        "<li>Open <b>OAuth consent screen</b>. Choose External, give it a name, and add your own email as a test user. Leave it in Testing. That allows up to a hundred people and needs no review.</li>" +
+        "<li>Open <b>Credentials</b>, then <b>Create credentials</b>, then <b>OAuth client ID</b>. Choose <b>Web application</b>.</li>" +
+        "<li>Under <b>Authorised JavaScript origins</b> add exactly:<br><b>" + esc(location.origin) + "</b></li>" +
+        "<li>Create it, copy the <b>Client ID</b>, and paste it below. It ends in <b>.apps.googleusercontent.com</b>.</li>" +
+        "</ul>A client ID is not a secret. It is meant to be visible in the page.";
+      steps.appendChild(st);
+      setup.appendChild(steps);
+      sy.appendChild(setup);
+
+      const ci = el("input");
+      ci.placeholder = "Paste your Client ID, ending in .apps.googleusercontent.com";
+      ci.value = g.clientId || "";
+      ci.oninput = () => { g.clientId = ci.value.trim(); save(); };
+      sy.appendChild(ci);
+
+      const st2 = el("div", "hint");
+      const stamp = g.lastSync ? new Date(g.lastSync).toLocaleString() : "never";
+      st2.innerHTML = g.token
+        ? "Signed in. Last synced: <b>" + esc(stamp) + "</b>."
+        : "Not signed in yet. Your data stays in a private folder only this app can see, and your other Drive files are invisible to it.";
+      sy.appendChild(st2);
+
+      const row = el("div", "btnrow");
+      const bIn = el("button", "btn pri", g.token ? "Sync now" : "Sign in and sync");
+      bIn.onclick = async () => {
+        if (!g.clientId) { syOut.innerHTML = ""; const e2 = el("div", "err"); e2.innerHTML = "<b>Paste your Client ID first.</b> The steps above walk you through getting one."; syOut.appendChild(e2); return; }
+        bIn.textContent = "Working…"; bIn.disabled = true; syOut.innerHTML = "";
+        try {
+          if (!gToken()) await gSignIn(true);
+          const r = await gSync();
+          if (r.did === "conflict") {
+            const c = el("div", "err");
+            c.innerHTML = "<b>Both copies changed since the last sync.</b> This device has " +
+              r.localCounts.w + " workspaces and " + r.localCounts.c + " simulations, changed " +
+              esc(new Date(r.localAt).toLocaleString()) + ". Drive has " + r.remoteCounts.w + " and " +
+              r.remoteCounts.c + ", changed " + esc(new Date(r.remoteAt).toLocaleString()) +
+              ". Export first if you are unsure, then pick one.";
+            const f3 = el("div", "fix");
+            const mine = el("button", "", "Keep this device");
+            mine.onclick = async () => { await gSync({ resolve:"mine" }); openSettings(); toast("Drive now matches this device"); };
+            const theirs = el("button", "", "Take the Drive copy");
+            theirs.onclick = async () => { await gSync({ resolve:"theirs" }); renderRail(); renderStream(); openSettings(); toast("This device now matches Drive"); };
+            f3.appendChild(mine); f3.appendChild(theirs); c.appendChild(f3);
+            syOut.appendChild(c);
+          } else {
+            const ok = el("div", "notice"); ok.style.borderColor = "var(--accent)";
+            const words2 = { pushed:"Sent to Drive", pulled:"Brought down from Drive", same:"Already in sync" };
+            ok.innerHTML = "<span><b>" + (words2[r.did] || "Done") + ".</b> " + esc(r.reason) + ".</span>";
+            syOut.appendChild(ok);
+            if (r.did === "pulled") { renderRail(); renderStream(); }
+            setSyncBadge("ok");
+          }
+        } catch (e) {
+          const e2 = el("div", "err");
+          e2.innerHTML = "<b>That did not work.</b> " + esc(e.message || "Unknown error");
+          syOut.appendChild(e2); setSyncBadge("error");
+        }
+        bIn.disabled = false; bIn.textContent = gToken() ? "Sync now" : "Sign in and sync";
+      };
+      row.appendChild(bIn);
+
+      if (g.token) {
+        const bOut = el("button", "btn", "Sign out");
+        bOut.onclick = () => { g.token = ""; g.tokenExp = 0; save(); openSettings(); toast("Signed out on this device. Nothing was deleted from Drive."); };
+        row.appendChild(bOut);
+      }
+      sy.appendChild(row);
+
+      const au = el("div", "clopts");
+      const ab = el("button", "clopt" + (g.auto ? " on" : ""), g.auto ? "Syncing automatically" : "Sync only when I press it");
+      ab.onclick = () => { g.auto = !g.auto; save(); openSettings(); };
+      au.appendChild(ab);
+      sy.appendChild(au);
+      sy.appendChild(syOut);
+      sy.appendChild(el("div", "hint", "Your Gemini key is deliberately left out of the sync. An API key does not belong in a file that travels between devices, even a private one."));
+      s.appendChild(sy);
+    }
+
     const f2 = el("div", "fld");
     f2.appendChild(el("label", "", "Your data"));
-    f2.appendChild(el("div", "hint", "Everything lives in this browser. Export regularly, because clearing site data deletes it."));
+    f2.appendChild(el("div", "hint", "Everything lives in this browser unless you turn on Drive sync above. Export regularly either way."));
     s.appendChild(f2);
     const row = el("div", "btnrow");
     const ex = el("button", "btn", "Export all");
@@ -4245,6 +4539,17 @@ function openSignals() {
    WIRING
    ============================================================ */
 function syncMode() { /* the mode is inferred per question, so there is no permanent control */ }
+
+function setSyncBadge(state) {
+  const b = $("#btnSync"), d = $("#syncDot"), l = $("#syncLabel");
+  if (!b) return;
+  const g = S.gsync;
+  if (!g || !g.clientId || !g.token) { b.hidden = true; return; }
+  b.hidden = false;
+  d.className = "syncdot " + state;
+  l.textContent = state === "ok" ? "Synced" : state === "conflict" ? "Two copies differ" : state === "syncing" ? "Syncing" : "Sync problem";
+  b.title = state === "ok" && g.lastSync ? "Last synced " + new Date(g.lastSync).toLocaleString() : "Open settings to sort this out";
+}
 function updateCtxPill() {
   const ws = activeWs(); const p = $("#ctxPill");
   if (!p) return;
@@ -4650,6 +4955,8 @@ function boot() {
     save(); renderRail(); renderStream(); openWorkspace(w.id);
   };
   $("#btnSettings").onclick = openSettings;
+  $("#btnSync").onclick = openSettings;
+  if (S.gsync && S.gsync.clientId && S.gsync.token) setSyncBadge("ok");
   $("#btnSignals").onclick = openSignals;
   $("#ctxPill").onclick = () => openWorkspace(activeWs().id);
   $("#typeRow").onclick = () => openModes(id => {
