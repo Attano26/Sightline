@@ -118,7 +118,7 @@ button{cursor:pointer;background:none;border:none;padding:0}
 }
 .rail-head{padding:22px 20px 14px;display:flex;align-items:center;gap:10px}
 .wordmark{font-weight:700;font-size:19px;letter-spacing:-.03em}
-.rail-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:0 12px 8px}
+.rail-scroll{flex:1 1 0;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 12px 8px;overscroll-behavior:contain}
 .rail-foot{padding:10px 12px calc(14px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line-2)}
 
 .newbtn{
@@ -195,8 +195,13 @@ button{cursor:pointer;background:none;border:none;padding:0}
 }
 
 /* ---------- main ---------- */
-.main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;background:var(--paper)}
+/* min-height:0 is load bearing. A flex item defaults to min-height:auto, which
+   means it refuses to shrink below its own content. Without it a tall card makes
+   the stream push the composer off the bottom of the screen, where overflow
+   hidden then clips it away entirely. */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative;background:var(--paper)}
 .topbar{
+  flex:0 0 auto;
   display:flex;align-items:center;gap:12px;padding:14px 22px;min-height:64px;
   background:color-mix(in srgb,var(--paper) 82%,transparent);
   backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
@@ -213,7 +218,7 @@ button{cursor:pointer;background:none;border:none;padding:0}
 .iconbtn{padding:8px;border-radius:var(--r-pill);color:var(--ink-2);transition:background .15s}
 .iconbtn:hover{background:var(--surface-2);color:var(--ink)}
 
-.stream{flex:1;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth}
+.stream{flex:1 1 0;min-height:0;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth;overscroll-behavior:contain}
 .streamin{max-width:748px;margin:0 auto;padding:32px 24px 40px;display:flex;flex-direction:column;gap:26px}
 
 /* ---------- welcome ---------- */
@@ -409,7 +414,7 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 @keyframes fi{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
 
 /* ---------- composer ---------- */
-.composer{padding:10px 24px calc(18px + env(safe-area-inset-bottom));background:var(--paper)}
+.composer{flex:0 0 auto;padding:10px 24px calc(18px + env(safe-area-inset-bottom));background:var(--paper)}
 .compin{max-width:748px;margin:0 auto}
 .moderow{display:flex;gap:8px;align-items:center;margin-bottom:10px}
 .modebtn{
@@ -809,6 +814,7 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 /* ---------- storage banner ---------- */
 .storebar[hidden]{display:none}
 .storebar{
+  flex:0 0 auto;
   display:flex;flex-direction:column;gap:10px;padding:14px 22px;
   background:var(--sev-med-soft);border-bottom:1px solid var(--line-2);
 }
@@ -887,6 +893,7 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 /* ---------- update bar ---------- */
 .updatebar[hidden]{display:none}
 .updatebar{
+  flex:0 0 auto;
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 22px;
   background:var(--accent-soft);border-bottom:1px solid var(--line-2);
 }
