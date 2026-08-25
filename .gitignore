@@ -1,0 +1,6 @@
+# Sightline is a static site. Nothing here is built, and nothing secret belongs in it.
+# The Gemini key is entered by each user at runtime and stored in their own browser,
+# so it must never appear in a file in this repository.
+.DS_Store
+Thumbs.db
+*.log
