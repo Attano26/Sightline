@@ -5119,7 +5119,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-l";
+const BUILD = "2026-08-26-m";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -6608,6 +6608,8 @@ function watchForUpdates() {
    The rAF pass exists because a first launch settles over several frames and
    fires no event that any listener here would catch. It runs for two seconds
    and stops as soon as the number holds still. */
+// Tallest a system bar is ever going to be. Anything past this is a keyboard.
+const SAFE_MAX = 80;
 let vpLast = 0;
 function applyViewport() {
   const vv = window.visualViewport;
@@ -6624,8 +6626,15 @@ function applyViewport() {
   // gesture navigation phone is what puts the composer under the system bar.
   // The gap between the window and the visible viewport is the same distance,
   // measured rather than declared.
+  // The gap between the window and the visible viewport is the system bar when
+  // it is small, and the on screen keyboard when it is not. Treating a keyboard
+  // as a safe area inset gave the composer nine hundred pixels of bottom
+  // padding: the stream collapsed to nothing and the input flew to the top of
+  // the screen. A gesture bar is tens of pixels, a keyboard is hundreds, so the
+  // ceiling is what tells them apart.
   const gap = Math.max(0, Math.round(window.innerHeight - h));
-  document.documentElement.style.setProperty("--safeb", (gap > 2 ? gap : 0) + "px");
+  const inset = (gap > 2 && gap <= SAFE_MAX) ? gap : 0;
+  document.documentElement.style.setProperty("--safeb", inset + "px");
   const moved = h !== vpLast;
   vpLast = h;
   return moved;
