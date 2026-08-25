@@ -970,6 +970,13 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .tdotnav.on{background:var(--ink);width:22px;border-radius:var(--r-pill)}
 @media(max-width:520px){.tgrid{grid-template-columns:1fr}}
 
+
+.ia.demo{border:1px dashed var(--sev-med);background:var(--surface)}
+.iademo{
+  font-size:12px;font-weight:700;color:var(--sev-med);
+  margin-bottom:7px;letter-spacing:0;
+}
+
 /* ---------- responsive ---------- */
 .backdrop{display:none}
 @media(max-width:899px){
@@ -3059,12 +3066,102 @@ const INTERVIEW_SEEDS = {
   INTERNAL: ["What are we getting wrong?", "What would you stop doing?", "What are you not telling leadership?"]
 };
 
-function demoInterview(actor, q) {
+/* Prepared answers for demo mode, one per suggested question per kind of actor.
+
+   The first version accepted the question and ignored it, so all three suggestions
+   returned the same reply. That reads as a broken feature rather than as a limit of
+   demo mode, which is worse. A tool that appears to answer while not answering is
+   the exact failure this product exists to avoid.
+
+   Anything typed freely gets an honest refusal rather than a generic reply. */
+const DEMO_INTERVIEW = {
+  CHANNEL: [
+    { answer: "Terms, mostly. You give me sixty days and a rival offers a hundred and twenty with free dies. That is working capital I do not have to find. Loyalty is lovely, but I finance your stock either way and nobody at the bank thanks me for it.",
+      what_it_reveals: "Cash, not margin, is what actually moves this channel",
+      would_change_my_mind: "Shorter payment terms, or you carrying the tooling cost" },
+    { answer: "Make me look good on site. When there is a leak in year three I want someone answering the phone, not a form. That is worth more to me than a discount, because the discount is long spent by then and the complaint is not.",
+      what_it_reveals: "Service after handover buys loyalty that price cannot",
+      would_change_my_mind: "One bad support experience on a live job" },
+    { answer: "I tell them it is the safe choice and that it will pass. I do not tell them it costs me more to fabricate, because that is my problem. But if you keep raising and I keep absorbing, one day I stop recommending you and quote whatever is easiest.",
+      what_it_reveals: "You are being recommended out of habit, and habit runs out",
+      would_change_my_mind: "Anything that makes your system cheaper to fabricate" }
+  ],
+  RIVAL: [
+    { answer: "Because you are slow here and everyone knows it. Your specification is better, I will grant you that. But a specification does not pour concrete, and a contractor who is late does not care whose thermal numbers were superior.",
+      what_it_reveals: "They are attacking delivery, not product",
+      would_change_my_mind: "A contractual lead time you actually hold to" },
+    { answer: "If the fight stops being worth it. I am not trying to win every job, I am trying to win the ones that pay. Defend your premium accounts hard enough and I will go and take easier volume somewhere else.",
+      what_it_reveals: "Their commitment is thinner than it looks",
+      would_change_my_mind: "Losing three in a row on accounts I expected to take" },
+    { answer: "The gap between what you promise and what your fabricators deliver. You sell engineering and they sell hours. Every time that gap shows up on a site, I am standing next to it pointing at it.",
+      what_it_reveals: "Your channel is your exposure, not your product",
+      would_change_my_mind: "Nothing you say. Only what your fabricators do" }
+  ],
+  SPECIFIER: [
+    { answer: "I do not write you out. The client does, at value engineering, and I sign it off because the alternative is arguing about money I am not paid to argue about. If you want to survive that stage, give me something I can defend that is not just a brand.",
+      what_it_reveals: "You are lost at a stage where nobody is defending you",
+      would_change_my_mind: "A performance case I can put in writing and stand behind" },
+    { answer: "Something I can be blamed for getting wrong if I choose anyone else. Test evidence at the right size, witnessed properly, and a building standing nearby that I can go and look at. That is what makes me insist.",
+      what_it_reveals: "They are managing their own risk, not choosing a product",
+      would_change_my_mind: "A local reference project I can actually visit" },
+    { answer: "Honestly, less than you think. Thermal numbers, water tightness, and whether the detail works at the junctions. Brochures do not survive that. Most of what you market at me I never read.",
+      what_it_reveals: "Most of your marketing aims at the wrong thing",
+      would_change_my_mind: "Better junction details, not better literature" }
+  ],
+  BUYER: [
+    { answer: "Because the number moved and nobody told me why. I do not mind paying more, I mind being surprised. Surprise makes me wonder what else I have not been told, and then I start looking at alternatives I was not looking at before.",
+      what_it_reveals: "The increase is a trust problem before it is a price problem",
+      would_change_my_mind: "Being told early, with a reason I can repeat upstairs" },
+    { answer: "Certainty on handover. If your system means the facade finishes on time, that is worth real money to me, because my penalty for being late is bigger than the whole facade package.",
+      what_it_reveals: "Schedule risk is where their money actually sits",
+      would_change_my_mind: "Evidence of on time delivery on a comparable tower" },
+    { answer: "Not the architect, whatever they told you. Procurement decides, and procurement decides on what looks comparable. If you are the only one who looks different, you are the one who gets questioned.",
+      what_it_reveals: "The specification becomes advisory once procurement starts",
+      would_change_my_mind: "Nothing. This is simply how we are set up" }
+  ],
+  REGULATOR: [
+    { answer: "The tall ones and the visible ones. That is where a failure becomes a headline. A small project with exactly the same non compliance will very likely never be looked at, and everyone in this industry knows it.",
+      what_it_reveals: "Enforcement follows visibility rather than risk",
+      would_change_my_mind: "A failure on a small building that got attention" },
+    { answer: "Large contractors, because they are easy to find and have something to lose. Everyone else gets checked when somebody complains. That is not policy, it is capacity.",
+      what_it_reveals: "Compliance pressure is uneven, and predictably so",
+      would_change_my_mind: "More inspectors, which is not coming" },
+    { answer: "Nothing formally. In practice, work already underway when a rule changes tends to carry on. Whether that is an exemption or simply nobody looking is a distinction I would rather not put in writing.",
+      what_it_reveals: "Transition periods are where the real risk sits",
+      would_change_my_mind: "A published transition rule instead of custom" }
+  ],
+  SUPPLIER: [
+    { answer: "Whoever pays on time and orders predictably. Not the biggest. When metal is tight I protect the accounts that do not disrupt my planning, and that is a shorter list than people assume.",
+      what_it_reveals: "Allocation follows behaviour, not volume",
+      would_change_my_mind: "Erratic ordering, however large the account" },
+    { answer: "Published terms are an opening position. What you actually get depends on volume, how long you have been with us, and whether you argue about every invoice. I would not put much faith in the price list.",
+      what_it_reveals: "Their terms are negotiable, and yours may be worse than you think",
+      would_change_my_mind: "A committed volume I can plan against" },
+    { answer: "The specials. Odd finishes, small runs, anything that interrupts a line. If capacity gets short those go first, and the customer usually finds out when the lead time quietly doubles.",
+      what_it_reveals: "Your non standard range is the fragile part of supply",
+      would_change_my_mind: "Enough volume to make the special ordinary" }
+  ],
+  INTERNAL: [
+    { answer: "We sell to fabricators and market to architects, and the two never meet. The architect specifies us, the fabricator quotes whatever is easiest, and we act surprised when we lose. Nobody owns the middle.",
+      what_it_reveals: "Nobody is accountable for the stage where deals are lost",
+      would_change_my_mind: "One person owning the fabricator relationship end to end" },
+    { answer: "Chasing marquee projects for the photograph. They cost a fortune to win, they are the hardest to deliver, and they do not repeat. The unglamorous repeat fabricator work pays for everything and gets the least attention.",
+      what_it_reveals: "Effort goes where visibility is, not where the money is",
+      would_change_my_mind: "Looking at margin per project instead of project value" },
+    { answer: "That we win on specification and lose on delivery, and we report the first and not the second. Everyone in the field knows it. It does not reach the deck.",
+      what_it_reveals: "The reporting hides the thing that is actually failing",
+      would_change_my_mind: "Reporting spec wins and site outcomes side by side" }
+  ]
+};
+
+function demoInterview(actor, q, seedIndex) {
+  const set = DEMO_INTERVIEW[actor.kind] || DEMO_INTERVIEW.RIVAL;
+  if (seedIndex != null && set[seedIndex]) return Object.assign({ demo: true }, set[seedIndex]);
   return {
-    answer: "Honestly, " + (actor.wants || "we look after ourselves").toLowerCase() +
-      ". That is the whole of it. When the pressure comes I will do whatever protects that, and the fact that we have worked together a long time will not change the arithmetic. If you want a different answer from me, change the arithmetic.",
-    what_it_reveals: "Their loyalty follows their economics, not the relationship",
-    would_change_my_mind: "Terms that make staying with you the cheaper option"
+    demo: true, free: true,
+    answer: "I cannot answer that one here. Demo mode carries prepared replies to the three suggested questions only, so it can show you what an interview looks like but not actually hold one. Add a Gemini key in Settings and this becomes a real conversation with this actor, in role, using your workspace context.",
+    what_it_reveals: "Demo mode can demonstrate this feature but not perform it",
+    would_change_my_mind: "A key in Settings"
   };
 }
 
@@ -3080,9 +3177,9 @@ function openInterview(actor, data, mode) {
     const log = el("div", "ilog"); s.appendChild(log);
 
     const seeds = el("div", "clopts");
-    (INTERVIEW_SEEDS[actor.kind] || INTERVIEW_SEEDS.RIVAL).forEach(q => {
+    (INTERVIEW_SEEDS[actor.kind] || INTERVIEW_SEEDS.RIVAL).forEach((q, qi) => {
       const b = el("button", "clopt", q);
-      b.onclick = () => ask(q);
+      b.onclick = () => ask(q, qi);
       seeds.appendChild(b);
     });
     s.appendChild(seeds);
@@ -3093,7 +3190,7 @@ function openInterview(actor, data, mode) {
     f.appendChild(inp);
     s.appendChild(f);
 
-    async function ask(q) {
+    async function ask(q, seedIndex) {
       log.appendChild(el("div", "iq", q));
       const pend = el("div", "ia pending");
       pend.appendChild(el("span", "dot"));
@@ -3102,7 +3199,7 @@ function openInterview(actor, data, mode) {
       pend.scrollIntoView({ block:"nearest" });
       let out = null, err = null;
       try {
-        if (!S.key) { await sleep(650); out = demoInterview(actor, q); }
+        if (!S.key) { await sleep(650); out = demoInterview(actor, q, seedIndex); }
         else out = await callGemini(S.key, interviewPrompt(actor, data, ws), q, INTERVIEW_SCHEMA);
       } catch (e) { err = e; }
       pend.remove();
@@ -3111,7 +3208,8 @@ function openInterview(actor, data, mode) {
         e2.innerHTML = "<b>They did not answer.</b> " + esc(err.message || "Unknown error");
         log.appendChild(e2); return;
       }
-      const a = el("div", "ia");
+      const a = el("div", "ia" + (out.demo ? " demo" : ""));
+      if (out.demo) a.appendChild(el("div", "iademo", out.free ? "Demo mode cannot answer this" : "Prepared answer, demo mode"));
       a.appendChild(el("div", "iatxt", out.answer));
       if (out.what_it_reveals) {
         const r = el("div", "iarev");
