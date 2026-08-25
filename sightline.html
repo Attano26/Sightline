@@ -1494,16 +1494,16 @@ const SLOTS = {
     q: "Your price is a price of what?",
     detect: has(/per m|per square|per sq|installed|ex.?works|per opening|per project|per tonne|per kg/i),
     options: () => [
-      opt("Ex works system, per square metre", "Our price is an ex works system price, per square metre.", false,
-          "Ex works is the trade term for collected at your factory gate. The buyer pays freight, duty and insurance from there. So this is profiles and hardware only, per square metre of opening, before anyone fabricates, glazes or installs it."),
-      opt("Installed window, per square metre", "Our price is a finished installed price, per square metre.", false,
-          "The finished window in the wall, glass and labour included. In this industry that is roughly three times an ex works system price, which is why the two must never be compared."),
-      opt("Per opening", "Our price is quoted per opening.", false,
-          "One price per window or door regardless of its size."),
-      opt("Per project", "Our price is quoted per project.", false,
-          "A single negotiated number for the whole job, not derived from a rate."),
-      opt("Per kilogram of profile", "Our price is quoted per kilogram of profile.", false,
-          "Priced on aluminium weight, so the number moves with LME and with how heavy the system is.")
+      opt("The system only, per square metre", "Our price is an ex works system price, per square metre.", false,
+          "Profiles and hardware, collected from us. The buyer pays freight and duty from there, and nobody has fabricated, glazed or fitted it yet. The trade term for this is <i>ex works</i>."),
+      opt("The finished fitted window, per square metre", "Our price is a finished installed price, per square metre.", false,
+          "The window in the wall, glass and labour included. In this industry that is roughly three times the system only price, which is exactly why it matters which one you mean."),
+      opt("One price per window or door", "Our price is quoted per opening.", false,
+          "A flat price for each opening, whatever size it is."),
+      opt("One price for the whole job", "Our price is quoted per project.", false,
+          "A single negotiated number for the project, not worked up from a rate."),
+      opt("By weight of aluminium", "Our price is quoted per kilogram of profile.", false,
+          "Priced per kilogram, so it moves with the metal price and with how heavy the system is.")
     ]
   },
   ourMove: {
@@ -4741,23 +4741,23 @@ function openWorkspace(id) {
     if (!ws.ctx.anchor) {
       const warn = el("div", "notice");
       warn.style.borderColor = "var(--sev-med)";
-      warn.innerHTML = "<span><b>The one field only you can fill.</b> Without it the model has nothing real to reason against, so every quantity falls back to “needs your price anchor”. The examples below will fill it in for you.</span>";
+      warn.innerHTML = "<span><b>The one thing only you can supply.</b> Without a real price of your own there is nothing to measure anything against, so every figure comes back as “needs a price from you”. Tap an example below to fill it in.</span>";
       s.appendChild(warn);
     }
-    mk("anchor", "Your price anchor", "One figure, and what it is a price <i>of</i>. This is the only number treated as fact, and every other quantity is stated relative to it. An ex works system price and an installed window price differ by roughly three times, so saying which one it is matters more than the figure itself.");
+    mk("anchor", "One price you already know", "A real price of yours, and what it covers. It is the only number here treated as fact, and every figure in every answer is measured against it. Pick an example below and edit it.");
     // Examples that fill the field, because the shape of this answer is harder to
     // describe than to show. Each covers a different basis, which is the point.
     // Labelled by the BASIS, not by the number. The basis is the part that changes
     // the reasoning, and truncating the chip text was hiding exactly that.
     const anchorEx = [
-      ["Ex works system, per m2", "3,400 rupees per square metre, ex works system price to the fabricator"],
-      ["Installed, per m2", "12,000 rupees per square metre, installed and commissioned, to the developer"],
-      ["Per opening, fitted", "45,000 rupees per opening, supplied and fitted"],
-      ["Per kilogram of profile", "540 rupees per kilogram of profile, ex works, to the fabricator"],
-      ["In euro, ex works", "Around 320 euro per square metre, ex works system, to our fabricators"]
+      ["What a fabricator pays us", "3,400 rupees per square metre for the system, collected from us, to the fabricator"],
+      ["The finished fitted window", "12,000 rupees per square metre, fitted and handed over, to the developer"],
+      ["One window, supplied and fitted", "45,000 rupees per opening, supplied and fitted"],
+      ["By weight of aluminium", "540 rupees per kilogram of profile, collected from us, to the fabricator"],
+      ["Priced in euro", "Around 320 euro per square metre for the system, collected from us, to our fabricators"]
     ];
     const exWrap = el("div", "exrow");
-    exWrap.appendChild(el("span", "exlb", "Fill in an example"));
+    exWrap.appendChild(el("span", "exlb", "Which of these is your price?"));
     const exChips = el("div", "clopts");
     anchorEx.forEach(([label, x]) => {
       const b = el("button", "clopt", label);
@@ -4963,7 +4963,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-h";
+const BUILD = "2026-08-26-i";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
