@@ -528,10 +528,44 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .confbox li{margin-bottom:7px}
 .confbox b{color:var(--ink);font-weight:600}
 
+/* ---------- ask ---------- */
+/* The browser's own confirm() stamps the origin across the top of every
+   dialog, so a delete prompt read "attano26.github.io says". That line is
+   browser chrome and a page cannot change it, which is the point of it: a
+   site must not be able to dress a dialog up as something else. The only way
+   to control the wording is to stop using native dialogs. */
+.ask[hidden]{display:none}
+.ask{
+  position:fixed;inset:0;z-index:140;display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.5);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+  padding:22px;animation:askIn .16s ease-out;
+}
+@keyframes askIn{from{opacity:0}to{opacity:1}}
+.askbox{
+  width:100%;max-width:400px;background:var(--surface);border-radius:var(--r-card);
+  padding:24px;box-shadow:var(--sh-2);animation:askPop .2s cubic-bezier(.22,1,.36,1);
+}
+@keyframes askPop{from{opacity:0;transform:scale(.95) translateY(8px)}to{opacity:1;transform:none}}
+.askttl{font-size:19px;font-weight:700;letter-spacing:-.026em;line-height:1.25;margin:0 0 8px}
+.askbody{font-size:14.5px;line-height:1.5;color:var(--ink-2);margin:0 0 18px}
+.askbody b{color:var(--ink);font-weight:600}
+.askbox input{
+  width:100%;padding:13px 15px;border-radius:var(--r-box);border:1px solid var(--line);
+  background:var(--surface-2);font-size:15px;margin-bottom:18px;font-family:var(--fs);
+}
+.askbox input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.askrow{display:flex;gap:9px;justify-content:flex-end}
+.askbtn{
+  padding:11px 20px;border-radius:var(--r-pill);font-size:14.5px;font-weight:600;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);
+}
+.askbtn.pri{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.askbtn.danger{background:var(--sev-high);color:#fff;border-color:var(--sev-high)}
+
 .toast{
   position:fixed;bottom:104px;left:50%;transform:translateX(-50%);
   background:var(--ink);color:var(--paper);padding:12px 22px;border-radius:var(--r-pill);
-  font-size:14.5px;font-weight:600;z-index:120;box-shadow:var(--sh-2);
+  font-size:14.5px;font-weight:600;z-index:180;box-shadow:var(--sh-2);
   opacity:0;pointer-events:none;transition:opacity .24s,transform .24s;white-space:nowrap;
 }
 .toast.on{opacity:1;transform:translateX(-50%) translateY(-8px)}
@@ -1334,6 +1368,7 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 
 <div class="scrim" id="scrim"><div class="sheet" id="sheet"></div></div>
 <div class="onb" id="onb" hidden></div>
+<div class="ask" id="ask" hidden></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -4252,6 +4287,82 @@ async function run(text, useMode) {
 /* ============================================================
    SHEETS
    ============================================================ */
+/* ------------------------------------------------------------
+   ASK
+
+   Replaces confirm() and prompt(). The native ones print the origin
+   across the top of the dialog, so a delete prompt in this app read
+   "attano26.github.io says". A page cannot change that line, and it
+   should not be able to: a site dressing its dialog up as the
+   browser's own is exactly the attack the rule prevents. The only
+   way to control the wording is to not use them.
+
+   Both return a promise. Escape and the backdrop cancel, Enter
+   accepts, and focus is put where the answer goes.
+   ------------------------------------------------------------ */
+function askClose(v, resolve) {
+  const a = $("#ask");
+  a.hidden = true; a.innerHTML = "";
+  document.removeEventListener("keydown", a._key);
+  a._key = null;
+  resolve(v);
+}
+
+function askShell(build) {
+  return new Promise(resolve => {
+    const a = $("#ask");
+    a.hidden = false; a.innerHTML = "";
+    const box = el("div", "askbox");
+    a.appendChild(box);
+    const done = v => askClose(v, resolve);
+    build(box, done);
+    a.onclick = e => { if (e.target === a) done(null); };
+    a._key = e => {
+      if (e.key === "Escape") { e.preventDefault(); done(null); }
+    };
+    document.addEventListener("keydown", a._key);
+  });
+}
+
+/* opts: { title, body, ok, cancel, danger } */
+function askConfirm(opts) {
+  return askShell((box, done) => {
+    const h = el("h2", "askttl"); h.textContent = opts.title; box.appendChild(h);
+    if (opts.body) { const p = el("p", "askbody"); p.innerHTML = opts.body; box.appendChild(p); }
+    const row = el("div", "askrow");
+    const no = el("button", "askbtn", opts.cancel || "Cancel");
+    no.onclick = () => done(false);
+    const yes = el("button", "askbtn " + (opts.danger ? "danger" : "pri"), opts.ok || "Continue");
+    yes.onclick = () => done(true);
+    row.appendChild(no); row.appendChild(yes);
+    box.appendChild(row);
+    setTimeout(() => yes.focus(), 40);
+  }).then(v => v === true);
+}
+
+/* opts: { title, body, value, placeholder, ok } */
+function askText(opts) {
+  return askShell((box, done) => {
+    const h = el("h2", "askttl"); h.textContent = opts.title; box.appendChild(h);
+    if (opts.body) { const p = el("p", "askbody"); p.innerHTML = opts.body; box.appendChild(p); }
+    const inp = el("input");
+    inp.value = opts.value || "";
+    if (opts.placeholder) inp.placeholder = opts.placeholder;
+    inp.onkeydown = e => {
+      if (e.key === "Enter") { e.preventDefault(); done(inp.value.trim() || null); }
+    };
+    box.appendChild(inp);
+    const row = el("div", "askrow");
+    const no = el("button", "askbtn", "Cancel");
+    no.onclick = () => done(null);
+    const yes = el("button", "askbtn pri", opts.ok || "Save");
+    yes.onclick = () => done(inp.value.trim() || null);
+    row.appendChild(no); row.appendChild(yes);
+    box.appendChild(row);
+    setTimeout(() => { inp.focus(); inp.select(); }, 40);
+  });
+}
+
 function openSheet(title, build) {
   const sh = $("#sheet");
 
@@ -4555,9 +4666,9 @@ function openChatMenu(c) {
        c.pinned ? "It will go back to sitting in date order" : "Pinned simulations stay above the rest in this workspace",
        () => { c.pinned = !c.pinned; save(); renderRail(); closeSheet(); toast(c.pinned ? "Pinned" : "Unpinned"); });
 
-    mk("Rename", "Currently: " + c.title, () => {
-      const v = prompt("Name this simulation", c.title);
-      if (v && v.trim()) { c.title = v.trim().slice(0, 80); save(); renderRail(); renderStream(); }
+    mk("Rename", "Currently: " + c.title, async () => {
+      const v = await askText({ title:"Name this simulation", value:c.title, placeholder:"A few words you will recognise later" });
+      if (v) { c.title = v.slice(0, 80); save(); renderRail(); renderStream(); }
       closeSheet();
     });
 
@@ -4586,8 +4697,10 @@ function openChatMenu(c) {
     s.appendChild(mv);
 
     const del = el("button", "btn danger", "Delete this simulation");
-    del.onclick = () => {
-      if (!confirm("Delete " + QL + c.title + QR + "? This cannot be undone.")) return;
+    del.onclick = async () => {
+      if (!await askConfirm({ title:"Delete this simulation?",
+        body:"<b>" + esc(c.title) + "</b> and everything in it. This cannot be undone.",
+        ok:"Delete", danger:true })) return;
       S.chats = S.chats.filter(z => z.id !== c.id);
       S.signals = S.signals.filter(x => x.chatId !== c.id);
       if (S.activeChat === c.id) S.activeChat = null;
@@ -4863,8 +4976,10 @@ function openWorkspace(id) {
       if (ws.facts.length > 1) {
         const clr = el("button", "btn danger", "Remove all " + ws.facts.length + " facts");
         clr.style.marginTop = "10px";
-        clr.onclick = () => {
-          if (!confirm("Remove all " + ws.facts.length + " facts from " + ws.name + "? This cannot be undone.")) return;
+        clr.onclick = async () => {
+          if (!await askConfirm({ title:"Remove every fact?",
+            body:"All " + ws.facts.length + " facts in <b>" + esc(ws.name) + "</b>. This cannot be undone.",
+            ok:"Remove all", danger:true })) return;
           ws.facts = []; save(); openWorkspace(id); toast("All facts removed");
         };
         f.appendChild(clr);
@@ -4873,15 +4988,17 @@ function openWorkspace(id) {
     }
     const addf = el("div", "fld");
     addf.appendChild(el("label", "", "Add a fact you know is true"));
-    const ta2 = el("input"); ta2.placeholder = "e.g. Our lead time is 9 weeks ex-works";
+    const ta2 = el("input"); ta2.placeholder = "e.g. Our lead time is 9 weeks from our works";
     addf.appendChild(ta2);
     addf.appendChild(el("div", "hint", "Facts build up over time. After a few sessions this workspace knows things a blank chat window never will."));
     s.appendChild(addf);
 
     const row = el("div", "btnrow");
     const preset = el("button", "btn", "Load Schüco India preset");
-    preset.onclick = () => {
-      if (ws.ctx.company && !confirm("Replace this workspace's context and facts with the Schüco India preset? Your price anchor and simulations are kept.")) return;
+    preset.onclick = async () => {
+      if (ws.ctx.company && !await askConfirm({ title:"Load the Schüco India preset?",
+        body:"This replaces the context and facts in <b>" + esc(ws.name) + "</b>. Your own price and your simulations are kept.",
+        ok:"Load preset" })) return;
       const seed = seedWorkspace(ws.id);
       const keepAnchor = ws.ctx.anchor;
       ws.name = seed.name; ws.ctx = seed.ctx; ws.ctx.anchor = keepAnchor;
@@ -4895,8 +5012,11 @@ function openWorkspace(id) {
     row.appendChild(add);
     if (S.workspaces.length > 1) {
       const del = el("button", "btn danger", "Delete workspace");
-      del.onclick = () => {
-        if (!confirm("Delete “" + ws.name + "” and its " + wsChats(ws.id).length + " simulations?")) return;
+      del.onclick = async () => {
+        const nc = wsChats(ws.id).length;
+        if (!await askConfirm({ title:"Delete this workspace?",
+          body:"<b>" + esc(ws.name) + "</b>" + (nc ? " and its " + nc + (nc === 1 ? " simulation" : " simulations") : ", which has no simulations in it") + ". This cannot be undone.",
+          ok:"Delete", danger:true })) return;
         S.chats = S.chats.filter(c => c.wsId !== ws.id);
         S.workspaces = S.workspaces.filter(w => w.id !== ws.id);
         S.activeWs = S.workspaces[0].id; S.activeChat = null;
@@ -4963,7 +5083,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-i";
+const BUILD = "2026-08-26-j";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -5590,12 +5710,19 @@ function pageData(s) {
     const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".json";
     inp.onchange = () => {
       const fr = new FileReader();
-      fr.onload = () => {
-        try {
-          const o = JSON.parse(fr.result); if (!o.workspaces) throw 0;
-          if (!confirm("Replace everything on this device with the backup? Export first if you are unsure.")) return;
-          S = o; repairText(S); save(); renderRail(); renderStream(); openSettingsPage("data"); toast("Imported");
-        } catch (e) { toast("That file could not be read"); }
+      fr.onload = async () => {
+        let o;
+        try { o = JSON.parse(fr.result); if (!o.workspaces) throw 0; }
+        catch (e) { toast("That file could not be read"); return; }
+        // The parse and the question are separated on purpose. Awaiting inside the
+        // try meant a cancel, or anything thrown by the redraw afterwards, was
+        // caught and reported as an unreadable file.
+        const nw = o.workspaces.length, nc = (o.chats || []).length;
+        if (!await askConfirm({ title:"Replace everything on this device?",
+          body:"The backup holds <b>" + nw + (nw === 1 ? " workspace" : " workspaces") + "</b> and <b>" +
+               nc + (nc === 1 ? " simulation" : " simulations") + "</b>. What is on this device now is discarded. Export first if you are unsure.",
+          ok:"Replace", danger:true })) return;
+        S = o; repairText(S); save(); renderRail(); renderStream(); openSettingsPage("data"); toast("Imported");
       };
       fr.readAsText(inp.files[0]);
     };
@@ -5609,9 +5736,13 @@ function pageData(s) {
   const d = el("div", "fld");
   d.appendChild(el("label", "", "Start again"));
   const del = el("button", "btn danger", "Delete everything on this device");
-  del.onclick = () => {
-    if (!confirm("Delete every workspace, simulation and fact on this device? Export first. This cannot be undone.")) return;
-    if (!confirm("Really delete all of it?")) return;
+  del.onclick = async () => {
+    if (!await askConfirm({ title:"Delete everything on this device?",
+      body:"Every workspace, simulation and fact. Export first if you have not. This cannot be undone.",
+      ok:"Delete everything", danger:true })) return;
+    if (!await askConfirm({ title:"Last check",
+      body:"This really does delete all of it.",
+      ok:"Yes, delete it all", danger:true })) return;
     localStorage.removeItem(K); S = fresh(); save();
     renderRail(); renderStream(); closeSheet(); toast("Everything deleted");
   };
