@@ -4,3 +4,14 @@
 .DS_Store
 Thumbs.db
 *.log
+
+# Internal working documents are deliberately kept out of this repository and live
+# alongside it instead, in ../Sightline docs/. Listed here so that dropping a copy
+# back into the folder does not quietly publish it.
+PRD.md
+ARCHITECTURE.md
+DESIGN.md
+PROMPTING.md
+RULES.md
+MEMORY.md
+README-full.md
