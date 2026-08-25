@@ -4970,7 +4970,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-e";
+const BUILD = "2026-08-26-f";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -5470,11 +5470,29 @@ function renderConflict(out, r) {
    and a dead end. */
 function signInHelp(msg) {
   const m = String(msg || "").toLowerCase();
-  if (m.indexOf("invalid_client") > -1)
-    return " This copy of the app is not authorised for <b>" + esc(location.origin) +
-           "</b>. That is something the publisher fixes, not you.";
+  // Established by experiment against Google's authorize endpoint, changing only
+  // the client ID: invalid_client is about the ID string and nothing else, and a
+  // wrong origin returns redirect_uri_mismatch instead. Worth being exact,
+  // because these two send you to opposite ends of the console.
+  if (m.indexOf("invalid_client") > -1 || m.indexOf("client was not found") > -1)
+    return " Google could not find the client this app identified itself with, which almost always " +
+           "means the ID it sent is incomplete. The console displays it shortened, and a shortened " +
+           "one produces exactly this. That is the publisher's to fix, not yours.";
+  if (m.indexOf("redirect_uri_mismatch") > -1 || m.indexOf("origin_mismatch") > -1)
+    return " This app is not registered for <b>" + esc(location.origin) +
+           "</b>. It works from the address it was published at. That is the publisher's to fix, not yours.";
+  // access_denied covers two completely different things, and telling somebody
+  // they declined when Google actually blocked them sends them looking in the
+  // wrong place entirely. The verification wording only ever appears for the
+  // second one, so it is worth splitting on.
+  // "access blocked", not bare "blocked", which a blocked popup also contains.
+  if (m.indexOf("verification") > -1 || m.indexOf("has not completed") > -1 || m.indexOf("access blocked") > -1)
+    return " Google blocked it rather than you declining. This app's consent screen is still set to " +
+           "<b>Testing</b>, which only lets accounts on its tester list in. The fix belongs to whoever " +
+           "publishes the app: publish the consent screen, or add this address as a tester.";
   if (m.indexOf("access_denied") > -1 || m.indexOf("denied") > -1)
-    return " You closed the Google window or declined. Nothing was changed.";
+    return " Either you closed the Google window, or the consent screen is still in Testing and this " +
+           "address is not on its tester list. Nothing was changed either way.";
   if (m.indexOf("popup") > -1)
     return " Your browser blocked the Google window. Allow popups for this site and press it again.";
   return "";
