@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Sightline">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-<link rel="icon" type="image/svg+xml" href="./logo.svg">
+<link rel="icon" type="image/svg+xml" href="./favicon.svg">
 <link rel="alternate icon" href="./icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -96,7 +96,22 @@
 }
 
 *{box-sizing:border-box;min-width:0}
+/* Height on a phone is not one number.
+
+   On a first launch, and only a first launch, the browser reports a viewport
+   that still includes chrome it is about to retract. `height:100%` resolves
+   against that stale number, the app lays out taller than the screen, and the
+   composer at the bottom ends up below the fold. Relaunching fixes it because by
+   then the viewport has settled, which is exactly why this only ever showed up
+   once per install.
+
+   `dvh` is the unit that tracks the retracting chrome. The `100%` line stays
+   ahead of it as the fallback for anything that does not know `dvh`, and
+   `--vvh`, set from visualViewport at runtime, is the last resort for the
+   browsers whose `dvh` is itself wrong on that first paint. */
 html,body{height:100%}
+html,body{height:100dvh}
+html.vvh,html.vvh body{height:var(--vvh)}
 body{
   margin:0;background:var(--paper);color:var(--ink);
   font-family:var(--fs);font-size:15px;line-height:1.55;
@@ -1015,12 +1030,169 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 @media(max-width:520px){.tgrid{grid-template-columns:1fr}}
 
 
+.demobar{
+  margin:0 18px 4px;padding:12px 14px;border-radius:var(--r-box);
+  background:var(--sev-med-soft,var(--surface-2));border:1px dashed var(--sev-med);
+  font-size:13px;line-height:1.5;color:var(--ink-2);
+}
+.demobar b{color:var(--sev-med);font-weight:700}
+.demobar a{color:var(--accent-ink);cursor:pointer;font-weight:500;text-decoration:none;border-bottom:1px solid currentColor}
+
 .ia.demo{border:1px dashed var(--sev-med);background:var(--surface)}
 .iademo{
   font-size:12px;font-weight:700;color:var(--sev-med);
   margin-bottom:7px;letter-spacing:0;
 }
 
+
+/* ---------- onboarding ---------- */
+/* Full screen rather than a sheet. Onboarding is the whole screen's job while it
+   is happening, and a bottom sheet with the app visible behind it says the
+   opposite: that this is a side errand you are being held up by.
+
+   The shape is art on top, type below, one action at the bottom. Type is the
+   loud element, set at display size and split across two weights so the phrase
+   that matters reads first and the rest recedes. Everything is on the app's own
+   palette, not the reference's, so this looks like the same product. */
+.onb{
+  position:fixed;inset:0;z-index:200;background:var(--paper);
+  display:flex;flex-direction:column;
+  padding:max(14px,env(safe-area-inset-top)) 0 max(18px,env(safe-area-inset-bottom));
+  animation:onbIn .38s cubic-bezier(.22,1,.36,1);
+}
+@keyframes onbIn{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:none}}
+.onbwrap{
+  width:100%;max-width:460px;margin:0 auto;flex:1 1 0;min-height:0;
+  display:flex;flex-direction:column;padding:0 22px;
+}
+
+.onbtop{display:flex;align-items:center;justify-content:space-between;flex:0 0 auto;padding:8px 0 4px}
+.onbbrand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:17px;letter-spacing:-.03em}
+.onbbrand svg{width:24px;height:24px;color:var(--ink)}
+.onbskip{
+  font-size:14px;font-weight:600;color:var(--ink-2);padding:8px 18px;
+  border-radius:var(--r-pill);background:var(--surface);border:1px solid var(--line);
+  transition:color .18s,box-shadow .18s;
+}
+.onbskip:hover{color:var(--ink);box-shadow:var(--sh-1)}
+
+/* The art panel takes whatever height is left after the type and the button have
+   taken theirs, which is what keeps a small phone legible: the words never get
+   squeezed, the picture does. */
+.onbart{
+  flex:1 1 auto;min-height:96px;margin:14px 0 26px;
+  border-radius:30px;background:var(--surface-2);
+  display:grid;place-items:center;overflow:hidden;position:relative;
+}
+.onbart::after{
+  content:"";position:absolute;inset:0;border-radius:30px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5);pointer-events:none;
+}
+:root[data-theme="dark"] .onbart::after{box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .onbart::after{box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}}
+
+/* Shared stage for the gradient pieces. Everything is drawn relative to this box
+   so each one scales with the panel instead of needing its own breakpoints. */
+.onbstage{position:relative;width:min(74%,260px);aspect-ratio:1;display:grid;place-items:center}
+
+/* A torus. The conic sweep is the body, the radial mask punches the hole, and the
+   soft white blob on top is the light catching one side of it. */
+.oring{
+  position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 220deg,#EDEFF5,#C9D4F2 22%,#5B8DEF 46%,#2B5FD9 58%,#8FA9E8 72%,#EEF0F6 96%,#EDEFF5);
+  -webkit-mask:radial-gradient(circle,transparent 46%,#000 47%);
+  mask:radial-gradient(circle,transparent 46%,#000 47%);
+  filter:blur(.3px);
+}
+.oringlit{
+  position:absolute;width:34%;height:34%;right:4%;top:34%;border-radius:50%;
+  background:radial-gradient(circle at 40% 40%,rgba(255,255,255,.95),rgba(255,255,255,0) 68%);
+  filter:blur(6px);
+}
+
+/* Four point star. clip-path gives the silhouette, the gradient gives it depth,
+   and the copy behind it blurred out is the glow it would cast. */
+.ostar,.ostarglow{
+  position:absolute;width:74%;height:74%;
+  clip-path:polygon(50% 0%,58% 42%,100% 50%,58% 58%,50% 100%,42% 58%,0% 50%,42% 42%);
+}
+.ostar{background:linear-gradient(150deg,#7FE3F0 0%,#2E7BE8 42%,#1B37B8 78%,#0E1F7A 100%)}
+.ostarglow{background:#2E7BE8;filter:blur(26px);opacity:.55;transform:scale(1.12)}
+.oring2{
+  position:absolute;width:96%;height:96%;border-radius:50%;
+  border:1.5px solid rgba(140,160,200,.32);
+}
+
+/* An organic blob. Three offset radial gradients inside an asymmetric radius,
+   blurred hard, which reads as volume without being a render. */
+.oblob{
+  position:absolute;width:86%;height:86%;
+  border-radius:58% 42% 47% 53% / 43% 51% 49% 57%;
+  background:
+    radial-gradient(circle at 68% 30%,#5FA8FF 0%,transparent 52%),
+    radial-gradient(circle at 34% 66%,#1B2FD0 0%,transparent 56%),
+    radial-gradient(circle at 52% 48%,#2E5BE8 0%,#0B1B8C 74%);
+  filter:blur(9px);
+  animation:blobDrift 14s ease-in-out infinite;
+}
+@keyframes blobDrift{
+  0%,100%{border-radius:58% 42% 47% 53% / 43% 51% 49% 57%;transform:rotate(0deg)}
+  50%{border-radius:44% 56% 58% 42% / 55% 44% 56% 45%;transform:rotate(6deg)}
+}
+@media (prefers-reduced-motion:reduce){.oblob{animation:none}}
+
+/* Headline. Two weights of the same size: the phrase that carries the point in
+   full ink, the connective words behind it. This is the one detail that makes a
+   plain sentence read as designed rather than as a paragraph in bold. */
+.onbfoot{flex:0 0 auto;display:flex;flex-direction:column}
+.onbttl{
+  font-size:clamp(29px,7.6vw,42px);line-height:1.1;letter-spacing:-.038em;
+  font-weight:700;margin:0 0 14px;text-wrap:balance;
+}
+.onbttl .dim{color:var(--ink-3)}
+.onbbody{
+  font-size:15.5px;line-height:1.55;color:var(--ink-2);margin:0 0 20px;
+  letter-spacing:-.011em;max-width:44ch;
+}
+
+.onbfld{display:flex;flex-direction:column;gap:9px;margin-bottom:18px}
+.onbfld input{
+  width:100%;padding:16px 18px;border-radius:var(--r-pill);
+  border:1px solid var(--line);background:var(--surface);font-size:16px;
+  transition:border-color .18s,box-shadow .18s;
+}
+.onbfld input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.onbfld .hint{font-size:12.5px;color:var(--ink-3);line-height:1.45;padding:0 4px}
+.onbfld .hint b{color:var(--ink-2);font-weight:600}
+
+.onbdots{display:flex;gap:6px;justify-content:center;margin:2px 0 16px}
+.onbdot{height:6px;width:6px;border-radius:var(--r-pill);background:var(--line);transition:width .26s cubic-bezier(.22,1,.36,1),background .2s}
+.onbdot.on{width:20px;background:var(--ink)}
+
+/* One primary action, full width, pill. The reference's most copyable idea, and
+   it happens to be the right one: on a phone the bottom of the screen is the
+   only place a thumb reaches comfortably. */
+.onbact{display:flex;gap:10px}
+.onbbtn{
+  flex:1;padding:17px 20px;border-radius:var(--r-pill);font-size:16px;font-weight:600;
+  background:var(--surface);color:var(--ink);border:1px solid var(--line);
+  box-shadow:var(--sh-1);transition:transform .16s,box-shadow .16s;
+}
+.onbbtn:hover{transform:translateY(-1px);box-shadow:var(--sh-2)}
+.onbbtn:active{transform:translateY(0)}
+.onbbtn.ghost{flex:0 0 auto;padding:17px 22px;background:transparent;box-shadow:none;border-color:transparent;color:var(--ink-2)}
+.onbbtn.ghost:hover{color:var(--ink);transform:none;box-shadow:none}
+.onbbtn.dark{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.onbbtn:disabled{opacity:.5;cursor:default;transform:none;box-shadow:var(--sh-1)}
+.onbbtn.g{display:flex;align-items:center;justify-content:center;gap:10px}
+
+/* Short phones: the art is the first thing to give up space, then it goes. */
+@media (max-height:680px){
+  .onbart{margin:10px 0 18px;border-radius:24px}
+  .onbttl{font-size:clamp(25px,6.6vw,32px);margin-bottom:10px}
+  .onbbody{font-size:14.5px;margin-bottom:14px}
+}
+@media (max-height:560px){ .onbart{display:none} }
 
 /* ---------- settings ---------- */
 .setlist{display:flex;flex-direction:column;gap:2px;border-radius:var(--r-box);overflow:hidden}
@@ -1182,6 +1354,7 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 </div>
 
 <div class="scrim" id="scrim"><div class="sheet" id="sheet"></div></div>
+<div class="onb" id="onb" hidden></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1721,6 +1894,33 @@ function answerability(text) {
   if (HYPOTHETICAL.test(text)) return null;
   for (const f of FACT_ASKS) if (f.re.test(text)) return f.why;
   return null;
+}
+
+/* Some inputs are not a thin question. They are not a question at all.
+
+   The clarify layer is the wrong tool for these, because its entire design
+   assumes there is a move buried in there that needs sharpening, and it offers a
+   way past itself for the case where the person knows something it could not
+   detect. "hi" is not that case. There is no reading of "hi" that a simulation
+   can answer honestly, so this gate sits in front of the clarify layer and is
+   deliberately not skippable.
+
+   Kept generous on purpose. A real move can be short, "raise prices in India",
+   so the bar is two content words rather than a sentence. */
+const FILLER = new Set(("hi hey hello helo yo hiya hola sup howdy ok okay k yes no thanks ta " +
+  "test testing check please pls plz just the a an and or but is are was were be been am " +
+  "do does did can could would should will shall may might must i we you it this that there " +
+  "here what how why when where who to of in on at for with about from as by").split(" "));
+
+function noSubstance(text) {
+  const t = (text || "").trim();
+  if (!t) return "There is nothing here to simulate.";
+  const words = t.toLowerCase().replace(/[^a-z0-9%₹$ ]+/g, " ").split(/\s+/).filter(Boolean);
+  const content = words.filter(w => w.length > 2 && !FILLER.has(w));
+  if (content.length >= 2) return null;
+  if (words.length && words.every(w => FILLER.has(w)))
+    return "That is a greeting, not a decision.";
+  return "There is not enough in that to react to.";
 }
 
 /* An auto rewrite of a fact question reads badly, because the grammar rarely
@@ -2577,6 +2777,20 @@ async function revealCard(host, data, an, conf, mode, fast) {
   host.appendChild(card);
 
   const bar = el("div", "cbar"); card.appendChild(bar);
+
+  // Said before anything else on the card, because everything below it is about a
+  // prepared scenario and not about the question that was just asked.
+  if (data.demo) {
+    const d = el("div", "demobar");
+    d.innerHTML = "<b>Prepared example, not an answer to what you typed.</b> " +
+      "This is a stored " + esc(data.demoOf || "").toLowerCase() +
+      " simulation, shown so you can see the shape of a real one. Nothing here was worked out from your question. " +
+      '<a id="lnkDemoKey">Add a key</a> and this becomes a real answer.';
+    card.appendChild(d);
+    const lk = d.querySelector("#lnkDemoKey");
+    if (lk) lk.onclick = openSettings;
+  }
+
   const body = el("div", "cbody"); card.appendChild(body);
 
   await at(F.verdict);
@@ -3969,7 +4183,12 @@ async function run(text, useMode) {
   try {
     if (!S.key) {
       await sleep(560);
+      // A prepared card replayed under a question it has nothing to do with is a
+      // tool that appears to answer while not answering, which is worse than one
+      // that plainly cannot. It gets flagged, on the card, every time.
       data = JSON.parse(JSON.stringify(DEMO[mode] || DEMO.rival_response));
+      data.demo = true;
+      data.demoOf = DEMO[mode] ? modeById(mode).name : modeById("rival_response").name;
       if (!DEMO[mode]) data.headline = "Demo card. Add a key to simulate this mode for real.";
     } else {
       data = await callGemini(S.key, systemPrompt(mode, ws), text, buildSchema(mode));
@@ -4046,6 +4265,10 @@ function openSheet(title, build) {
 }
 const closeSheet = () => $("#scrim").classList.remove("on");
 
+/* The same mark the rail uses, cloned rather than repeated, so there is one
+   copy of the path in this file and the two can never drift apart. */
+const appLogo = () => { const s = $("#rail .mark").cloneNode(true); s.removeAttribute("class"); return s; };
+
 /* ------------------------------------------------------------
    ONBOARDING
 
@@ -4059,55 +4282,66 @@ const closeSheet = () => $("#scrim").classList.remove("on");
    it can bring a returning person's whole account back, which makes
    every screen after it unnecessary for them.
 
+   Titles are written as segments rather than strings so the phrase
+   that carries the point can sit in full ink with the connective
+   words behind it. That one detail is what makes a plain sentence
+   read as designed instead of as a paragraph set in bold.
+
    Everything is skippable. None of it is required to use the app.
    ------------------------------------------------------------ */
 const TOUR = [
-  { kind:"say", tag:"What this is",
-    title:"It works out how people will react.",
-    body:"Describe a move you are considering. A price, a launch, a tender, a competitor, a cost shock, a code change. It works out who reacts, what they do about it, and what that turns into a few months later.",
-    art:"cascade" },
+  { kind:"say", tag:"What this is", art:"ring",
+    title:[["Meet the", 1], ["market", 0], ["you are about to move", 1]],
+    body:"Describe something you are considering. A price, a launch, a tender, a competitor, a cost shock, a code change. It works out who reacts, what they do about it, and what that turns into a few months later." },
 
-  { kind:"name", tag:"First, your name",
-    title:"What should it call you?",
+  { kind:"name", tag:"First, your name", art:"blob",
+    title:[["What should it", 1], ["call you?", 0]],
     body:"Used to greet you here and to sign anything you export. It is never sent to the model, and you can change it in Settings whenever you like." },
 
-  { kind:"say", tag:"How to read an answer",
-    title:"The end is rarely the same problem as the start.",
-    body:"Every answer plays out over three stages. A price cut looks like a margin problem on day one. A quarter later it is a channel problem. A year later it is a specification problem. That drift is the thing worth seeing, and a single answer from a chatbot stops at the first one.",
-    art:"stages" },
+  { kind:"say", tag:"How to read an answer", art:"spine",
+    title:[["The end is rarely", 1], ["the same problem", 0], ["as the start", 1]],
+    body:"A price cut looks like a margin problem on day one. A quarter later it is a channel problem. A year later it is a specification problem. That drift is the thing worth seeing, and a single answer from a chatbot stops at the first one." },
 
-  { kind:"say", tag:"What happens when you ask",
-    title:"Four steps, every time.",
-    body:"It reads your question and works out what kind of decision it is. It checks whether anything important is missing and asks you rather than guessing. It runs the reaction using what you have told it about your market. Then it hands back an answer shaped for that decision, and three questions worth asking next.",
-    art:"pipeline" },
+  { kind:"say", tag:"What happens when you ask", art:"pipeline",
+    title:[["Four steps,", 0], ["every time", 1]],
+    body:"It works out what kind of decision this is, asks about anything important you left out rather than guessing, runs the reaction against your market, and hands back an answer shaped for that decision." },
 
-  { kind:"signin", tag:"Optional",
-    title:"Keep your work on every device.",
-    body:"Sign in and your workspaces, simulations and saved signals live in your own Google Drive, as one file this app creates. It can touch that file and nothing else of yours. Skip it and everything still works, it simply stays on this device." },
+  { kind:"signin", tag:"Optional", art:"star",
+    title:[["Keep your work on", 1], ["every device", 0]],
+    body:"Your workspaces, simulations and saved signals live in your own Google Drive, in one file this app creates. It can touch that file and nothing else of yours." },
 
-  { kind:"key", tag:"Optional, and nearly free",
-    title:"Add a key to run it for real.",
-    body:"Without one you are in demo mode: real prepared simulations, fully explorable, nothing generated. With one, every answer is worked out from your own context. It never searches the web, which is the expensive part of this API, so a simulation costs a fraction of a rupee." },
+  { kind:"key", tag:"Optional, and nearly free", art:"blob",
+    title:[["Add a key to", 1], ["run it for real", 0]],
+    body:"Without one you are in demo mode, which replays prepared examples and says so on every card. With one, every answer is worked out from your own context. It never searches the web, so a simulation costs a fraction of a rupee." },
 
-  { kind:"context", tag:"Last thing",
-    title:"Tell it who you are.",
+  { kind:"context", tag:"Last thing", art:"ring",
+    title:[["Tell it", 1], ["who you are", 0]],
     body:"Your company, your market and your real competitors are what separate an answer about you from an answer about any company anywhere. This matters more than the key does." }
 ];
 
-function tourArt(kind) {
-  const w = el("div", "tourart " + kind);
-  if (kind === "cascade" || kind === "stages") {
-    const names = kind === "stages"
-      ? ["What happens first", "What that sets off", "Where it ends up"]
-      : ["Your fabricators", "A rival", "The specification"];
+/* Gradient art, built from the app's own palette rather than the reference's, so
+   this reads as the same product and not as a borrowed screen. */
+function onbArt(kind) {
+  const st = el("div", "onbstage");
+  if (kind === "ring") {
+    st.appendChild(el("div", "oring"));
+    st.appendChild(el("div", "oringlit"));
+  } else if (kind === "star") {
+    st.appendChild(el("div", "ostarglow"));
+    st.appendChild(el("div", "oring2"));
+    st.appendChild(el("div", "ostar"));
+  } else if (kind === "blob") {
+    st.appendChild(el("div", "oblob"));
+  } else if (kind === "spine") {
     const sp = el("div", "tspine");
-    names.forEach((n, i) => {
+    ["What happens first", "What that sets off", "Where it ends up"].forEach((n, i) => {
       const row = el("div", "tnode n" + i);
       row.appendChild(el("span", "tdot"));
       row.appendChild(el("span", "tlabel", n));
       sp.appendChild(row);
     });
-    w.appendChild(sp);
+    st.style.width = "min(84%,300px)"; st.style.aspectRatio = "auto";
+    st.appendChild(sp);
   } else if (kind === "pipeline") {
     const p = el("div", "tpipe");
     [["Reads", "what kind of decision this is"],
@@ -4122,19 +4356,14 @@ function tourArt(kind) {
       row.appendChild(t);
       p.appendChild(row);
     });
-    w.appendChild(p);
-  } else if (kind === "ask") {
-    const q = el("div", "tchips");
-    ["Which competitor?", "Reynaers", "Low cost imports", "Not one in particular"].forEach((t, i) => {
-      q.appendChild(el("span", "tchip" + (i === 0 ? " q" : i === 1 ? " on" : ""), t));
-    });
-    w.appendChild(q);
+    st.style.width = "min(88%,320px)"; st.style.aspectRatio = "auto";
+    st.appendChild(p);
   }
-  return w;
+  return st;
 }
 
-/* Google's own mark, so the button is recognisable as a Google button rather
-   than a button that mentions Google. */
+/* Google's own mark, so the button reads as a Google button rather than as a
+   button that happens to mention Google. */
 function googleMark() {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   s.setAttribute("viewBox", "0 0 48 48");
@@ -4147,60 +4376,82 @@ function googleMark() {
   return s;
 }
 
+const closeTour = () => { const o = $("#onb"); o.hidden = true; o.innerHTML = ""; };
+
 function openTour(startAt) {
   let i = startAt || 0;
   const go = n => { i = n; paint(); };
-  const finish = () => { S.tourDone = true; save(); closeSheet(); renderRail(); renderStream(); };
+  const finish = () => { S.tourDone = true; save(); closeTour(); renderRail(); renderStream(); };
 
   function paint() {
     const step = TOUR[i];
-    openSheet("Getting started", s => {
-      const box = el("div", "tour");
-      box.appendChild(el("div", "wtag", step.tag));
-      if (step.art) box.appendChild(tourArt(step.art));
-      const h = el("h2", "tourttl"); h.textContent = step.title; box.appendChild(h);
-      box.appendChild(el("p", "tourbody", step.body));
+    const o = $("#onb");
+    o.hidden = false; o.innerHTML = "";
+    const wrap = el("div", "onbwrap"); o.appendChild(wrap);
 
-      if (step.kind === "name") stepName(box);
-      if (step.kind === "signin") stepSignIn(box);
-      if (step.kind === "key") stepKey(box);
-      if (step.kind === "context") stepContext(box);
+    const top = el("div", "onbtop");
+    const brand = el("div", "onbbrand");
+    brand.appendChild(appLogo());
+    brand.appendChild(el("span", "", "Sightline"));
+    top.appendChild(brand);
+    const skip = el("button", "onbskip", "Skip");
+    skip.onclick = finish;
+    top.appendChild(skip);
+    wrap.appendChild(top);
 
-      const dots = el("div", "tdots");
-      TOUR.forEach((_, n) => {
-        const d = el("button", "tdotnav" + (n === i ? " on" : ""));
-        d.title = TOUR[n].tag;
-        d.onclick = () => go(n);
-        dots.appendChild(d);
-      });
-      box.appendChild(dots);
+    const art = el("div", "onbart");
+    art.appendChild(onbArt(step.art));
+    wrap.appendChild(art);
 
-      const row = el("div", "btnrow");
-      if (i > 0) { const b = el("button", "btn", "Back"); b.onclick = () => go(i - 1); row.appendChild(b); }
-      const last = i === TOUR.length - 1;
-      const skip = el("button", "btn", last ? "Not now" : "Skip");
-      skip.onclick = finish;
-      row.appendChild(skip);
-      if (!last) { const n = el("button", "btn pri", "Next"); n.onclick = () => go(i + 1); row.appendChild(n); }
-      box.appendChild(row);
-      s.appendChild(box);
+    const foot = el("div", "onbfoot");
+    const h = el("h2", "onbttl");
+    step.title.forEach((seg, n) => {
+      const sp = el("span", seg[1] ? "dim" : "");
+      sp.textContent = (n ? " " : "") + seg[0];
+      h.appendChild(sp);
     });
+    foot.appendChild(h);
+    foot.appendChild(el("p", "onbbody", step.body));
+
+    if (step.kind === "name") stepName(foot);
+    if (step.kind === "signin") stepSignIn(foot);
+    if (step.kind === "key") stepKey(foot);
+    if (step.kind === "context") stepContext(foot);
+
+    const dots = el("div", "onbdots");
+    TOUR.forEach((_, n) => {
+      const d = el("button", "onbdot" + (n === i ? " on" : ""));
+      d.title = TOUR[n].tag;
+      d.onclick = () => go(n);
+      dots.appendChild(d);
+    });
+    foot.appendChild(dots);
+
+    const act = el("div", "onbact");
+    if (i > 0) { const b = el("button", "onbbtn ghost", "Back"); b.onclick = () => go(i - 1); act.appendChild(b); }
+    const last = i === TOUR.length - 1;
+    const nx = el("button", "onbbtn" + (last ? " dark" : ""), last ? "Start using it" : "Continue");
+    nx.onclick = last ? finish : () => go(i + 1);
+    act.appendChild(nx);
+    foot.appendChild(act);
+
+    wrap.appendChild(foot);
   }
 
-  function stepName(box) {
-    const f = el("div", "fld");
+  function stepName(foot) {
+    const f = el("div", "onbfld");
     const inp = el("input");
     inp.placeholder = "Your first name is plenty";
     inp.value = S.userName || "";
     inp.oninput = () => { S.userName = inp.value.slice(0, 40); save(); };
     inp.onkeydown = e => { if (e.key === "Enter" && i < TOUR.length - 1) go(i + 1); };
     f.appendChild(inp);
-    box.appendChild(f);
-    setTimeout(() => inp.focus(), 80);
+    foot.appendChild(f);
+    setTimeout(() => inp.focus(), 120);
   }
 
-  function stepSignIn(box) {
-    const f = el("div", "fld");
+  function stepSignIn(foot) {
+    const f = el("div", "onbfld");
     const g = gsync();
     const canSync = location.protocol === "https:" || location.hostname === "localhost";
 
@@ -4208,82 +4459,68 @@ function openTour(startAt) {
       f.appendChild(el("div", "hint", !canSync
         ? "Google will not accept a sign in from a file opened directly, or from a preview pane. Open the hosted version and this appears."
         : "Sign in is not set up for this copy of the app. Everything else works, and your data stays on this device."));
-      box.appendChild(f); return;
+      foot.appendChild(f); return;
     }
 
-    const st = el("div", "cistatus");
-    const setSt = (state, msg) => {
-      st.className = "cistatus " + state;
-      st.innerHTML = '<span class="cidot"></span><span class="citext">' + msg + "</span>";
-    };
-    if (g.token) setSt("ok", "Signed in. Your work is being kept in your Drive.");
-
-    const b = el("button", "btn google");
+    const st = el("div", "hint");
+    const b = el("button", "onbbtn g" + (g.token ? "" : " dark"));
     b.appendChild(googleMark());
-    b.appendChild(el("span", "", g.token ? "Signed in" : "Continue with Google"));
+    const lbl = el("span", "", g.token ? "Signed in" : "Continue with Google");
+    b.appendChild(lbl);
     b.disabled = !!g.token;
+    if (g.token) st.textContent = "Signed in. Your work is being kept in your Drive.";
+    else st.innerHTML = "It asks for one permission: to manage the single file it creates. It cannot see anything else in your Drive.";
     b.onclick = async () => {
-      b.disabled = true; b.lastChild.textContent = "Waiting for Google…";
+      b.disabled = true; lbl.textContent = "Waiting for Google…";
       try {
         await gSignIn(true);
         const r = await gSync();
-        // A returning person's data comes back here, which is the entire point of
-        // putting sign in before the two screens that ask them to type things.
-        if (r.did === "pulled") {
-          setSt("ok", "Signed in, and your existing work came back.");
-          renderRail(); renderStream();
-        } else if (r.did === "conflict") {
-          setSt("wait", "Signed in. There are two versions of your data, so Settings will ask which to keep.");
-        } else {
-          setSt("ok", "Signed in. Everything from here on is kept in your Drive.");
-        }
+        // A returning person's data comes back right here, which is the whole
+        // reason sign in sits before the two screens that ask them to type.
+        if (r.did === "pulled") { st.textContent = "Signed in, and your existing work came back."; renderRail(); renderStream(); }
+        else if (r.did === "conflict") st.textContent = "Signed in. There are two versions of your data, so Settings will ask which to keep.";
+        else st.textContent = "Signed in. Everything from here on is kept in your Drive.";
         setSyncBadge("ok");
-        b.lastChild.textContent = "Signed in";
+        lbl.textContent = "Signed in";
       } catch (e) {
         const msg = e.message || "Unknown error";
-        setSt("bad", esc(msg) + signInHelp(msg));
-        b.disabled = false; b.lastChild.textContent = "Try again";
+        st.innerHTML = esc(msg) + signInHelp(msg);
+        b.disabled = false; lbl.textContent = "Try again";
       }
     };
-    f.appendChild(b);
-    f.appendChild(st);
-    f.appendChild(el("div", "hint", "It asks for one permission: to manage the single file it creates. It cannot see anything else in your Drive."));
-    box.appendChild(f);
+    f.appendChild(b); f.appendChild(st);
+    foot.appendChild(f);
   }
 
-  function stepKey(box) {
-    const f = el("div", "fld");
+  function stepKey(foot) {
+    const f = el("div", "onbfld");
     const inp = el("input");
     inp.type = "password";
     inp.placeholder = "Paste a Gemini key, or skip";
     inp.value = S.key || "";
-    const st = el("div", "cistatus");
-    const paint2 = () => {
-      if (!S.key) { st.className = "cistatus"; st.innerHTML = ""; return; }
-      st.className = "cistatus ok";
-      st.innerHTML = '<span class="cidot"></span><span class="citext">Saved on this device. Settings can test it against Google whenever you want.</span>';
+    const st = el("div", "hint");
+    const say = () => {
+      st.innerHTML = S.key
+        ? "Saved on this device. Settings can test it against Google whenever you want."
+        : "Free from <b>aistudio.google.com</b>. Stored in this browser only, sent to Google and nobody else, and deliberately left out of the Drive sync.";
     };
-    inp.oninput = () => { S.key = inp.value.trim(); save(); paint2(); };
-    paint2();
+    inp.oninput = () => { S.key = inp.value.trim(); save(); say(); };
+    say();
     f.appendChild(inp); f.appendChild(st);
-    f.appendChild(el("div", "hint", "Free from <b>aistudio.google.com</b>. It is stored in this browser only, sent to Google and to nobody else, and deliberately left out of the Drive sync."));
-    box.appendChild(f);
+    foot.appendChild(f);
   }
 
-  function stepContext(box) {
+  function stepContext(foot) {
     const ws = activeWs();
     const missing = ctxMissing(ws);
-    const f = el("div", "fld");
-    const st = el("div", "cistatus " + (missing.length ? "wait" : "ok"));
-    st.innerHTML = '<span class="cidot"></span><span class="citext">' +
-      (missing.length ? "Still blank: " + esc(missing.join(", ")).toLowerCase() + "."
-                      : "Everything it needs about you is filled in.") + "</span>";
-    f.appendChild(st);
-    const b = el("button", "btn pri", missing.length ? "Set up my workspace" : "Review my workspace");
-    b.onclick = () => { S.tourDone = true; save(); openWorkspace(ws.id); };
+    const f = el("div", "onbfld");
+    const b = el("button", "onbbtn", missing.length ? "Set up my workspace" : "Review my workspace");
+    b.onclick = () => { S.tourDone = true; save(); closeTour(); renderRail(); renderStream(); openWorkspace(ws.id); };
     f.appendChild(b);
-    f.appendChild(el("div", "hint", "It starts filled in for Schüco India as a worked example. Change it to yours, or start a fresh workspace from the sidebar."));
-    box.appendChild(f);
+    f.appendChild(el("div", "hint", missing.length
+      ? "Still blank: " + esc(missing.join(", ")).toLowerCase() + ". It starts filled in for Schüco India as a worked example, so change it to yours."
+      : "Filled in for Schüco India as a worked example. Change it to yours, or start a fresh workspace from the sidebar."));
+    foot.appendChild(f);
   }
 
   paint();
@@ -5480,6 +5717,43 @@ function updateSend() {
    --------------------------------------- */
 let clarifyState = null;
 
+/* The refusal for input with nothing in it.
+
+   Deliberately has no way past it. Every other gate in this app offers one,
+   because every other gate is guessing about something the person may know
+   better. This one is not guessing: there is no decision in the text, so there
+   is nothing a simulation could be right or wrong about. Offering "run it
+   anyway" here would only produce a confident answer to a question nobody
+   asked, which is precisely what it exists to prevent. */
+function openNothing(text, why) {
+  closeClarify();
+  const c = $("#clarify"); c.hidden = false; c.innerHTML = "";
+  c.classList.add("cannot");
+  setFocus(true, () => { closeCannot(); $("#ta").focus(); });
+  const head = el("div", "clhead");
+  head.appendChild(el("span", "cantttl", "There is no decision in that yet"));
+  c.appendChild(head);
+  c.appendChild(el("div", "cantwhy", why));
+  c.appendChild(el("div", "cantwhy2", "Describe the move you are weighing up and it has something to react to. It does not need to be long, but it does need to contain the thing you are thinking of doing."));
+
+  const lb = el("div", "cantlb", "Questions like these do work");
+  c.appendChild(lb);
+  const exs = el("div", "clopts");
+  reframeExamples(S.mode).forEach(q => {
+    const b = el("button", "clopt", q);
+    b.onclick = () => { $("#ta").value = q; autosize(); updateSend(); closeCannot(); $("#ta").focus(); };
+    exs.appendChild(b);
+  });
+  c.appendChild(exs);
+
+  const opts = el("div", "clopts");
+  const ed = el("button", "clopt", "Let me write one");
+  ed.onclick = () => { closeCannot(); $("#ta").focus(); };
+  opts.appendChild(ed);
+  c.appendChild(opts);
+  scrollDown();
+}
+
 function openCannot(text, why) {
   closeClarify();
   const c = $("#clarify"); c.hidden = false; c.innerHTML = "";
@@ -5690,8 +5964,12 @@ function submit() {
   // neither applies to "why do you say that".
   const chat = activeChat();
   if (looksLikeFollowUp(v, chat)) { $("#ta").value = ""; autosize(); updateSend(); runFollowUp(v, chat); return; }
-  // Answerability is checked before anything else, because running a call on a
-  // question that cannot be answered produces a fluent, confident, invented reply.
+  // Substance is checked first and cannot be overridden. Everything downstream,
+  // clarify included, assumes there is a decision in here somewhere to sharpen.
+  const empty = noSubstance(v);
+  if (empty) { openNothing(v, empty); return; }
+  // Answerability is checked next, because running a call on a question that
+  // cannot be answered produces a fluent, confident, invented reply.
   if (!S.overrideAnswerability) {
     const why = answerability(v);
     if (why) { openCannot(v, why); return; }
@@ -5837,6 +6115,32 @@ function watchForUpdates() {
    What is deliberately NOT blocked is keyboard zoom. Ctrl plus and ctrl minus are
    how someone with poor eyesight reads a screen, and taking that away to stop an
    accident is the wrong trade. Accidental zoom goes, intentional zoom stays. */
+/* The runtime half of the height fix.
+
+   Only engages when the visual viewport genuinely disagrees with what the
+   document laid out against, so on a browser where dvh already behaves this does
+   nothing at all. Runs again on resize and on the first few frames after launch,
+   which is the window in which the chrome retracts. */
+function trackViewport() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const apply = () => {
+    const h = Math.round(vv.height);
+    const off = Math.abs(h - document.documentElement.clientHeight);
+    if (off > 2) {
+      document.documentElement.style.setProperty("--vvh", h + "px");
+      document.documentElement.classList.add("vvh");
+    } else {
+      document.documentElement.classList.remove("vvh");
+    }
+  };
+  vv.addEventListener("resize", apply);
+  window.addEventListener("orientationchange", () => setTimeout(apply, 240));
+  // The first launch is the case this exists for, so check across the frames in
+  // which the browser is still settling rather than only once.
+  [0, 60, 200, 500, 1000].forEach(d => setTimeout(apply, d));
+}
+
 function lockZoom() {
   const stop = e => { if (e.ctrlKey) e.preventDefault(); };
   window.addEventListener("wheel", stop, { passive:false });
@@ -5850,7 +6154,7 @@ const closeRail = () => { $("#rail").classList.remove("open"); $("#backdrop").cl
 function boot() {
   load();
   if (S.theme) document.documentElement.setAttribute("data-theme", S.theme);
-  probeStorage(); showStorageBanner(); watchForUpdates(); lockZoom();
+  probeStorage(); showStorageBanner(); watchForUpdates(); lockZoom(); trackViewport();
   if (!S.tourDone && !S.chats.length) setTimeout(() => openTour(0), 400);
   syncMode(); renderRail(); renderStream(); updateSend();
 
