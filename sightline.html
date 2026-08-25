@@ -707,14 +707,18 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 
 
 .typerow[hidden]{display:none}
+.metarow{display:flex;align-items:center;gap:2px;flex-wrap:wrap;margin-bottom:8px}
+.typerow[hidden]{display:none}
 .typerow{
-  display:flex;align-items:center;gap:8px;margin:0 0 8px 4px;padding:5px 12px 5px 6px;
+  display:flex;align-items:center;gap:8px;margin:0 0 0 4px;padding:5px 12px 5px 6px;
   border-radius:var(--r-pill);font-size:13px;color:var(--ink-3);align-self:flex-start;
   width:fit-content;transition:background .15s;
 }
 .typerow:hover{background:var(--surface-2)}
 .typelb{color:var(--ink-3)}
-.typeval{font-weight:600;color:var(--ink)}
+/* A workspace can be named anything, and an unbounded name in here pushes the
+   change affordance off the row. Truncate rather than let it grow. */
+.typeval{font-weight:600;color:var(--ink);max-width:20ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .typechg{color:var(--accent-ink);font-weight:600}
 .chip.mode{cursor:pointer}
 .chip.mode:hover{color:var(--ink)}
@@ -1373,11 +1377,18 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
     <div class="composer">
       <div class="compin">
         <div class="clarify" id="clarify" hidden></div>
-        <button class="typerow" id="typeRow">
-          <span class="typelb">Reading this as</span>
-          <span class="typeval" id="typeVal"></span>
-          <span class="typechg">change</span>
-        </button>
+        <div class="metarow">
+          <button class="typerow" id="typeRow">
+            <span class="typelb">Reading this as</span>
+            <span class="typeval" id="typeVal"></span>
+            <span class="typechg">change</span>
+          </button>
+          <button class="typerow" id="wsRow" hidden>
+            <span class="typelb">in</span>
+            <span class="typeval" id="wsVal"></span>
+            <span class="typechg">change</span>
+          </button>
+        </div>
         <div class="inbox">
           <textarea id="ta" rows="1" placeholder="What are you thinking of doing?"></textarea>
           <button class="sendbtn" id="send" disabled aria-label="Run simulation">
@@ -5108,7 +5119,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-k";
+const BUILD = "2026-08-26-l";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -5988,6 +5999,60 @@ function updateSend() {
     $("#typeVal").textContent = "it will ask";
   }
   S.pendingMode = guessed || null;
+
+  /* Which workspace this will belong to.
+
+     Only while starting a new simulation, because once one exists its workspace
+     is settled and moving it is a different action, handled in its own menu. And
+     only when there is more than one, since a chooser with a single option is
+     just a label taking up room. */
+  const wsr = $("#wsRow");
+  if (!wsr) return;
+  const many = S.workspaces.length > 1;
+  wsr.hidden = !!activeChat() || !many;
+  if (!wsr.hidden) $("#wsVal").textContent = activeWs().name;
+}
+
+/* Pick the workspace a new simulation will belong to. Switching also switches the
+   context pack, the examples and the rail, because a workspace is the whole
+   setting a question is asked inside, not a folder it is filed into afterwards. */
+function openWsPicker() {
+  openSheet("Which workspace?", s => {
+    s.appendChild(el("div", "hint", "A simulation belongs to one workspace and uses its context: your company, market, competitors and the price you gave it. Switching here changes what this next question is asked against."));
+    const list = el("div", "clopts");
+    list.style.marginTop = "14px";
+    S.workspaces.forEach(w => {
+      const on = w.id === S.activeWs;
+      const b = el("button", "clopt long" + (on ? " on" : ""));
+      const n = el("div", "", w.name);
+      n.style.fontWeight = "600";
+      b.appendChild(n);
+      const miss = ctxMissing(w);
+      const sub2 = el("div", "", miss.length
+        ? miss.length + (miss.length === 1 ? " field" : " fields") + " still blank"
+        : "Fully set up");
+      sub2.style.cssText = "font-size:12.5px;color:var(--ink-3);margin-top:3px";
+      b.appendChild(sub2);
+      b.onclick = () => {
+        S.activeWs = w.id; S.activeChat = null;
+        save(); renderRail(); renderStream(); updateSend(); closeSheet();
+        toast("Asking in " + w.name);
+      };
+      list.appendChild(b);
+    });
+    s.appendChild(list);
+
+    const row = el("div", "btnrow");
+    const add = el("button", "btn", "Start a new workspace");
+    add.onclick = () => {
+      const w = { id:uid(), name:"New workspace", collapsed:false,
+        ctx:{ company:"", product:"", market:"", audience:"", anchor:"", rivals:"", channel:"", customers:"", suppliers:"", bodies:"", horizon:"2 quarters" }, facts:[] };
+      S.workspaces.push(w); S.activeWs = w.id; S.activeChat = null;
+      save(); renderRail(); renderStream(); updateSend(); openWorkspace(w.id);
+    };
+    row.appendChild(add);
+    s.appendChild(row);
+  });
 }
 
 /* ---------- the clarify panel ----------
@@ -6614,6 +6679,7 @@ function boot() {
     }
   });
   $("#send").onclick = () => submit();
+  $("#wsRow").onclick = openWsPicker;
   $("#newChat").onclick = () => { S.activeChat = null; save(); renderRail(); renderStream(); closeRail(); $("#ta").focus(); };
   $("#btnNewWs").onclick = () => {
     const w = { id:uid(), name:"New workspace", collapsed:false,
