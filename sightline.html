@@ -597,6 +597,29 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .clqt{font-size:13.5px;color:var(--ink-2);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .clmulti{font-size:12px;color:var(--ink-3);background:var(--surface-2);padding:1px 8px;border-radius:var(--r-pill)}
 .clopts{display:flex;flex-wrap:wrap;gap:7px}
+/* ---------- small talk ---------- */
+.smallbox{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);
+  padding:18px 20px;display:flex;flex-direction:column;gap:14px;
+}
+.smalltxt{font-size:15.5px;line-height:1.55;letter-spacing:-.011em}
+.smallsug{display:flex;flex-direction:column;gap:8px}
+/* Left aligned, and roomy. These hold whole sentences, and pill styling built
+   for one or two words centred them and squeezed them. */
+.sugchip{
+  text-align:left;padding:12px 16px;border-radius:var(--r-box);
+  border:1px solid var(--line);background:var(--surface-2);
+  font-size:14.5px;line-height:1.42;color:var(--ink);letter-spacing:-.011em;
+  transition:border-color .15s,background .15s;
+}
+.sugchip:hover{border-color:var(--ink-3);background:var(--surface)}
+.smthink{font-size:14px;color:var(--ink-3);padding:4px 2px;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
+
+/* A chip holding a whole sentence is not a pill. Centring wrapped text in one
+   left it looking squeezed and off centre, which is what it was. */
+.clopt.long{border-radius:var(--r-box);text-align:left;padding:12px 16px;font-size:14px;line-height:1.42;width:100%}
+
 .clopt{
   padding:7px 14px;border-radius:var(--r-pill);border:1px solid var(--line);
   font-size:13.5px;font-weight:500;color:var(--ink);background:var(--surface);
@@ -4106,7 +4129,7 @@ function renderStream() {
   c.turns.forEach(t => {
     if (t.role === "user") {
       const w = el("div", "uturn"); const b = el("div", "ubub");
-      if (!t.followUp) b.appendChild(el("span", "umode", modeById(t.mode).name));
+      if (!t.followUp && !t.small) b.appendChild(el("span", "umode", modeById(t.mode).name));
       b.appendChild(el("span", "", t.text));
       w.appendChild(b); box.appendChild(w);
     } else if (t.role === "card") {
@@ -4117,6 +4140,8 @@ function renderStream() {
       revealCard(host, t.data, an, cf, t.mode, true);
     } else if (t.role === "reply") {
       const host = el("div"); box.appendChild(host); renderReply(host, t.data);
+    } else if (t.role === "small") {
+      const host = el("div"); box.appendChild(host); renderSmall(host, t.data);
     } else if (t.role === "error") {
       const e = el("div", "err");
       e.innerHTML = "<b>" + esc(t.title) + "</b>" + esc(t.body);
@@ -5083,7 +5108,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-j";
+const BUILD = "2026-08-26-k";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -5973,41 +5998,147 @@ function updateSend() {
    --------------------------------------- */
 let clarifyState = null;
 
-/* The refusal for input with nothing in it.
+/* ------------------------------------------------------------
+   SMALL TALK
 
-   Deliberately has no way past it. Every other gate in this app offers one,
-   because every other gate is guessing about something the person may know
-   better. This one is not guessing: there is no decision in the text, so there
-   is nothing a simulation could be right or wrong about. Offering "run it
-   anyway" here would only produce a confident answer to a question nobody
-   asked, which is precisely what it exists to prevent. */
-function openNothing(text, why) {
-  closeClarify();
-  const c = $("#clarify"); c.hidden = false; c.innerHTML = "";
-  c.classList.add("cannot");
-  setFocus(true, () => { closeCannot(); $("#ta").focus(); });
-  const head = el("div", "clhead");
-  head.appendChild(el("span", "cantttl", "There is no decision in that yet"));
-  c.appendChild(head);
-  c.appendChild(el("div", "cantwhy", why));
-  c.appendChild(el("div", "cantwhy2", "Describe the move you are weighing up and it has something to react to. It does not need to be long, but it does need to contain the thing you are thinking of doing."));
+   Somebody typing "how are you?" is not making a mistake. They are
+   working out what this thing is. Answering that with "there is no
+   decision in that yet" is technically correct and reads as a
+   telling off, which is a poor first impression from a tool nobody
+   has committed to yet.
 
-  const lb = el("div", "cantlb", "Questions like these do work");
-  c.appendChild(lb);
-  const exs = el("div", "clopts");
-  reframeExamples(S.mode).forEach(q => {
-    const b = el("button", "clopt", q);
-    b.onclick = () => { $("#ta").value = q; autosize(); updateSend(); closeCannot(); $("#ta").focus(); };
-    exs.appendChild(b);
-  });
-  c.appendChild(exs);
+   So a message with nothing to simulate in it gets a reply rather
+   than a refusal, and the reply ends by inviting a decision instead
+   of demanding one. With a key it is answered by the model, which
+   can read what they actually meant. Without one it is answered
+   from here, warmly, and that costs nothing.
+   ------------------------------------------------------------ */
+const SOCIAL = [
+  { id:"howareyou",
+    re: /how('?s| is| are| have)?\s*(are\s*)?(you|u|things|it going|everything)\b|how'?s it going|you (ok|okay|good|well|alright)/i,
+    say: ["Doing well, thank you for asking.", "All good here, thanks."] },
+  { id:"greeting",
+    re: /^\s*(hi|hey|hello|helo|yo|hiya|howdy|hola|namaste|good (morning|afternoon|evening))\b/i,
+    say: ["Hello.", "Hi there.", "Good to see you."] },
+  { id:"thanks",
+    re: /\b(thanks|thank you|cheers|ta|appreciate)\b/i,
+    say: ["Any time.", "You are very welcome."] },
+  { id:"whoareyou",
+    re: /\b(who|what) (are|r) (you|u)\b|what (do|can) you do|what is this|whats this/i,
+    say: ["I work out how a market reacts to something you are considering: who responds, what they do, and what it turns into a few months later."] },
+  { id:"test",
+    re: /^\s*(test|testing|check|ping|hello world)\b/i,
+    say: ["Working, and listening."] }
+];
 
-  const opts = el("div", "clopts");
-  const ed = el("button", "clopt", "Let me write one");
-  ed.onclick = () => { closeCannot(); $("#ta").focus(); };
-  opts.appendChild(ed);
-  c.appendChild(opts);
+function socialKind(text) {
+  for (const s of SOCIAL) if (s.re.test(text)) return s;
+  return null;
+}
+
+/* Deterministic per message rather than random, so the same thing typed twice
+   does not produce two different personalities. */
+function pickSay(kind, text) {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
+  return kind.say[h % kind.say.length];
+}
+
+function localSmallTalk(text, ws) {
+  const kind = socialKind(text);
+  const who = (S.userName || "").trim();
+  let open;
+  if (kind) {
+    open = pickSay(kind, text);
+    if (kind.id === "greeting" && who) open = open.replace(/[.!]$/, ", " + who + ".");
+  } else {
+    open = "I am not sure there is a decision in that one yet.";
+  }
+  const co = (ws.ctx && ws.ctx.company || "").split(",")[0].trim();
+  const invite = kind && kind.id === "whoareyou"
+    ? "Give me something you are actually weighing up and I will show you."
+    : co
+      ? "What is on your desk at " + co + " at the moment?"
+      : "What are you weighing up?";
+  return { text: open + " " + invite, suggestions: reframeExamples(S.mode).slice(0, 2), source:"local" };
+}
+
+const CHAT_SCHEMA = {
+  type:"object",
+  properties:{
+    reply:{ type:"string", description:"At most two short sentences. Warm, plain, never scolding. End by inviting them to describe a decision." },
+    suggestions:{ type:"array", minItems:2, maxItems:3,
+      items:{ type:"string", description:"A question they might actually have meant, specific to their company and market, phrased as they would say it. Max 14 words." } }
+  },
+  required:["reply","suggestions"]
+};
+
+function chatPrompt(ws) {
+  return "You are the front door of a market simulator for the facade and fenestration industry." + NL +
+    "The person has typed something with no decision in it to simulate: small talk, a greeting, or a half formed thought." + NL + NL +
+    "Reply warmly and briefly, as a knowledgeable colleague would. Never tell them they are wrong, never" + NL +
+    "say the word " + QL + "decision" + QR + " back at them as a correction, and never explain your own rules." + NL +
+    "If they asked how you are, answer it before anything else." + NL +
+    "Then invite them to describe something they are weighing up." + NL + NL +
+    "Then propose two or three questions THEY plausibly meant, drawn from their own context below." + NL +
+    "Each must be a real facade or fenestration decision, in their own words, not a category name." + NL + NL +
+    "British English. No dashes of any kind. No emoji. No bullet points inside the reply." + NL + NL +
+    "THEIR CONTEXT" + NL + contextPack(ws);
+}
+
+async function smallTalk(text, ws) {
+  if (!S.key) return localSmallTalk(text, ws);
+  try {
+    const out = await callGemini(S.key, chatPrompt(ws), text, CHAT_SCHEMA);
+    if (!out || !out.reply) throw 0;
+    const sug = (out.suggestions || []).filter(x => typeof x === "string" && x.trim()).slice(0, 3);
+    return { text: out.reply.trim(), suggestions: sug.length ? sug : reframeExamples(S.mode).slice(0, 2), source:"model" };
+  } catch (e) {
+    // A failed pleasantry is not worth an error card. Fall back and say nothing.
+    return localSmallTalk(text, ws);
+  }
+}
+
+async function runSmallTalk(text) {
+  const ws = activeWs();
+  let c = activeChat();
+  if (!c) {
+    c = { id:uid(), wsId:ws.id, title:words(text, 6), turns:[], updated:Date.now() };
+    S.chats.push(c); S.activeChat = c.id;
+  }
+  c.turns.push({ role:"user", text, small:true });
+  c.updated = Date.now(); save(); renderRail();
+
+  const box = $("#streamIn");
+  const uw = el("div", "uturn"); const ub = el("div", "ubub");
+  ub.appendChild(el("span", "", text));
+  uw.appendChild(ub); box.appendChild(uw);
   scrollDown();
+
+  const host = el("div"); box.appendChild(host);
+  if (S.key) { host.appendChild(el("div", "smthink", "Reading that")); scrollDown(); }
+
+  const out = await smallTalk(text, ws);
+  host.innerHTML = "";
+  c.turns.push({ role:"small", data:out });
+  c.updated = Date.now(); save();
+  renderSmall(host, out);
+  scrollDown();
+}
+
+function renderSmall(host, out) {
+  const box = el("div", "smallbox fadein");
+  box.appendChild(el("div", "smalltxt", out.text));
+  if (out.suggestions && out.suggestions.length) {
+    const row = el("div", "smallsug");
+    out.suggestions.forEach(q => {
+      const b = el("button", "sugchip", q);
+      b.onclick = () => { $("#ta").value = q; autosize(); updateSend(); $("#ta").focus(); };
+      row.appendChild(b);
+    });
+    box.appendChild(row);
+  }
+  host.appendChild(box);
 }
 
 function openCannot(text, why) {
@@ -6025,7 +6156,7 @@ function openCannot(text, why) {
   c.appendChild(lb);
   const exs = el("div", "clopts");
   reframeExamples(S.mode).forEach(q => {
-    const b = el("button", "clopt", q);
+    const b = el("button", "clopt long", q);
     b.onclick = () => { $("#ta").value = q; autosize(); updateSend(); closeCannot(); $("#ta").focus(); };
     exs.appendChild(b);
   });
@@ -6241,8 +6372,9 @@ function submit() {
   if (looksLikeFollowUp(v, chat)) { $("#ta").value = ""; autosize(); updateSend(); runFollowUp(v, chat); return; }
   // Substance is checked first and cannot be overridden. Everything downstream,
   // clarify included, assumes there is a decision in here somewhere to sharpen.
-  const empty = noSubstance(v);
-  if (empty) { openNothing(v, empty); return; }
+  // Nothing to simulate is not the same as a mistake. It gets a reply, not a
+  // refusal, and the reply invites a decision rather than demanding one.
+  if (noSubstance(v)) { $("#ta").value = ""; autosize(); updateSend(); runSmallTalk(v); return; }
   // Answerability is checked next, because running a call on a question that
   // cannot be answered produces a fluent, confident, invented reply.
   if (!S.overrideAnswerability) {
