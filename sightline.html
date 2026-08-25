@@ -4739,11 +4739,22 @@ function openSettings() {
       const checkCi = () => {
         const v = (g.clientId || "").trim();
         if (!v) { ciWarn.textContent = ""; ciWarn.style.color = ""; return; }
-        // A soft note, never a block. The only real test is asking Google.
-        if (!/\.apps\.googleusercontent\.com$/.test(v)) {
-          ciWarn.innerHTML = "That does not end in <b>.apps.googleusercontent.com</b>, which every client ID does. If you copied the client secret by mistake, Google will answer with 401 invalid_client.";
-          ciWarn.style.color = "var(--sev-med)";
-        } else { ciWarn.textContent = "That looks like a client ID."; ciWarn.style.color = ""; }
+        // Soft notes, never a block. The only real test is asking Google. But a
+        // truncated paste is invisible otherwise, and the Cloud console shows the
+        // ID abbreviated with an ellipsis right next to a copy button, so copying
+        // the visible text instead of pressing that button is easy to do and
+        // produces exactly the same error as a wrong client.
+        const SUF = ".apps.googleusercontent.com";
+        const bad = m => { ciWarn.innerHTML = m; ciWarn.style.color = "var(--sev-med)"; };
+        if (/…|\.\.\./.test(v)) return bad("That contains an ellipsis, so it is the shortened version the console displays, not the whole ID. Use the copy button beside it in Google Cloud Console.");
+        if (/^GOCSPX/i.test(v)) return bad("That is a client <b>secret</b>. You want the value ending in <b>" + SUF + "</b>.");
+        if (v.indexOf(SUF) === -1) return bad("That does not end in <b>" + SUF + "</b>, which every client ID does. Google will answer 401 invalid_client.");
+        const head = v.slice(0, v.length - SUF.length);
+        if (!/^\d{8,}-[A-Za-z0-9_]{10,}$/.test(head)) {
+          return bad("The part before " + SUF + " looks incomplete. A full ID is a project number, a dash, then a long random section. Yours is " + head.length + " characters. Copy it again with the copy button.");
+        }
+        ciWarn.innerHTML = "That looks complete. " + v.length + " characters, project number <b>" + esc(head.split("-")[0]) + "</b>.";
+        ciWarn.style.color = "";
       };
       ci.oninput = () => { g.clientId = ci.value.trim(); save(); checkCi(); };
       sy.appendChild(ci);
