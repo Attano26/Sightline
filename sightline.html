@@ -5243,7 +5243,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-s";
+const BUILD = "2026-08-26-t";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -6297,7 +6297,7 @@ function localSmallTalk(text, ws) {
   const invite = kind && kind.id === "whoareyou"
     ? "Give me something you are actually weighing up and I will show you."
     : co
-      ? "What is on your desk at " + co + " at the moment?"
+      ? "What is on your desk at " + co + " just now?"
       : "What are you weighing up?";
   return { text: open + " " + invite, suggestions: reframeExamples(S.mode).slice(0, 2), source:"local" };
 }
@@ -6352,6 +6352,11 @@ function chatPrompt(ws, kind) {
     "ANSWER WHAT THEY ACTUALLY SAID. Read their exact words and respond to those. Somebody who asked" + NL +
     "for a joke has not asked how you are, and being met with " + QL + "I am doing well, thank you" + QR + " reads as" + NL +
     "not having been listened to. Refer to the specific thing they said before moving on." + NL + NL +
+    "DO NOT ASSUME ANYTHING ABOUT THEM PERSONALLY. The context below describes their company and" + NL +
+    "their market. It does not say where this person is sitting, what time it is for them, what the" + NL +
+    "day is like, or what they are doing. A company registered in one city does not put the reader" + NL +
+    "in that city. Never write " + QL + "over here in" + QR + " anywhere, never greet them by a place, and" + NL +
+    "never refer to their local time, weather or surroundings." + NL + NL +
     "YOU CANNOT LOOK ANYTHING UP. You have no web access, no weather, no news, no prices, no today." + NL +
     "Never state a current fact about the world. If they ask for one, say you have no way to know it." + NL +
     "Saying " + QL + "it is warm and pleasant in Bengaluru today" + QR + " when you cannot see outside is a lie," + NL +
