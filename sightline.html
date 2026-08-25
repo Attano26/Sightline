@@ -1054,6 +1054,15 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
    loud element, set at display size and split across two weights so the phrase
    that matters reads first and the rest recedes. Everything is on the app's own
    palette, not the reference's, so this looks like the same product. */
+/* This rule must come first and it must exist.
+
+   `[hidden]` is only a UA stylesheet rule at element specificity, so the
+   `display:flex` below outranks it and the attribute stops working. That shipped
+   once: an empty, full screen, paper coloured overlay at z-index 200 sat over
+   the whole app, which on a dark theme is an entirely black screen. Measuring
+   the page could not catch it either, because getBoundingClientRect happily
+   reports a composer that is fully covered. */
+.onb[hidden]{display:none}
 .onb{
   position:fixed;inset:0;z-index:200;background:var(--paper);
   display:flex;flex-direction:column;
@@ -4947,7 +4956,14 @@ function applyProfile(ws, id, md) {
 
    Anyone self hosting on a different origin can still set their own in Settings,
    which is why the override below survives. */
-const APP_CLIENT_ID = "";
+const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
+
+/* Shipped first, and the stored one only as a fallback.
+
+   That order also repairs a device by loading it. The console displays a client
+   ID shortened, and a shortened one produces exactly the 401 invalid_client this
+   app was returning for days. Since the built-in value now wins, any truncated
+   string already saved on a device is simply never read again. */
 const clientId = () => (APP_CLIENT_ID || (gsync().clientId || "")).trim();
 
 /* drive.file, not drive.appdata.
