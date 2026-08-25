@@ -5180,7 +5180,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-n";
+const BUILD = "2026-08-26-o";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -6201,23 +6201,40 @@ const CHAT_SCHEMA = {
   required:["reply","suggestions"]
 };
 
-function chatPrompt(ws) {
+/* The router is a word list, so it cannot tell a greeting from a real question
+   phrased without industry words. "How do we win more work in Bengaluru?" is a
+   proper question and lands here purely because it names nothing on the list.
+
+   The model can tell the difference, so it is told which of the three it is
+   looking at and handled differently. Treating a real question as small talk is
+   the failure worth avoiding: answering "hello" with suggestions is charming,
+   answering somebody's actual strategy question with "hello" is not. */
+function chatPrompt(ws, kind) {
+  const framing = kind === "off topic"
+    ? "They have said something social or off topic. Acknowledge it lightly and with good humour, " +
+      "without pretending to be a general purpose assistant, then turn to what they might want."
+    : kind === "greeting"
+      ? "They have greeted you or asked how you are. Answer that first, briefly and warmly."
+      : "They have asked something real, but too broad or too vague to simulate as it stands. " +
+        "Do NOT treat it as small talk. Take it seriously, show you understood what they are getting at, " +
+        "and make your suggestions sharpened versions of THEIR question rather than unrelated examples.";
+
   return "You are the front door of a market simulator for the facade and fenestration industry." + NL +
-    "The person has typed something with no decision in it to simulate: small talk, a greeting, or a half formed thought." + NL + NL +
+    framing + NL + NL +
     "Reply warmly and briefly, as a knowledgeable colleague would. Never tell them they are wrong, never" + NL +
     "say the word " + QL + "decision" + QR + " back at them as a correction, and never explain your own rules." + NL +
-    "If they asked how you are, answer it before anything else." + NL +
-    "Then invite them to describe something they are weighing up." + NL + NL +
+    "Then invite them to say more about what they are weighing up." + NL + NL +
     "Then propose two or three questions THEY plausibly meant, drawn from their own context below." + NL +
-    "Each must be a real facade or fenestration decision, in their own words, not a category name." + NL + NL +
+    "Each must be a real facade or fenestration decision, in their own words, not a category name," + NL +
+    "and specific enough that a simulation could actually be run on it." + NL + NL +
     "British English. No dashes of any kind. No emoji. No bullet points inside the reply." + NL + NL +
     "THEIR CONTEXT" + NL + contextPack(ws);
 }
 
-async function smallTalk(text, ws) {
+async function smallTalk(text, ws, kind) {
   if (!S.key) return localSmallTalk(text, ws);
   try {
-    const out = await callGemini(S.key, chatPrompt(ws), text, CHAT_SCHEMA);
+    const out = await callGemini(S.key, chatPrompt(ws, kind), text, CHAT_SCHEMA);
     if (!out || !out.reply) throw 0;
     const sug = (out.suggestions || []).filter(x => typeof x === "string" && x.trim()).slice(0, 3);
     return { text: out.reply.trim(), suggestions: sug.length ? sug : reframeExamples(S.mode).slice(0, 2), source:"model" };
@@ -6227,7 +6244,7 @@ async function smallTalk(text, ws) {
   }
 }
 
-async function runSmallTalk(text) {
+async function runSmallTalk(text, kind) {
   const ws = activeWs();
   let c = activeChat();
   if (!c) {
@@ -6246,7 +6263,7 @@ async function runSmallTalk(text) {
   const host = el("div"); box.appendChild(host);
   if (S.key) { host.appendChild(el("div", "smthink", "Reading that")); scrollDown(); }
 
-  const out = await smallTalk(text, ws);
+  const out = await smallTalk(text, ws, kind);
   host.innerHTML = "";
   c.turns.push({ role:"small", data:out });
   c.updated = Date.now(); save();
@@ -6507,7 +6524,7 @@ function submit() {
      serious" was answered as a question about the card above it. Plainly off
      topic now wins over everything: no phrasing turns a joke into a question
      about a facade cascade. */
-  if (gap0 === "off topic") { clear(); runSmallTalk(v); return; }
+  if (gap0 === "off topic") { clear(); runSmallTalk(v, gap0); return; }
 
   /* And a real follow up refers to what is on screen. Something carrying no
      business at all and nothing pointing back at the card is not a follow up,
@@ -6520,7 +6537,7 @@ function submit() {
 
   // Nothing to simulate is not the same as a mistake. It gets a reply, not a
   // refusal, and the reply invites a decision rather than demanding one.
-  if (gap0) { clear(); runSmallTalk(v); return; }
+  if (gap0) { clear(); runSmallTalk(v, gap0 === "no decision" ? "vague" : "greeting"); return; }
   // Answerability is checked next, because running a call on a question that
   // cannot be answered produces a fluent, confident, invented reply.
   if (!S.overrideAnswerability) {
