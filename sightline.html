@@ -1968,15 +1968,76 @@ const FILLER = new Set(("hi hey hello helo yo hiya hola sup howdy ok okay k yes 
   "do does did can could would should will shall may might must i we you it this that there " +
   "here what how why when where who to of in on at for with about from as by").split(" "));
 
-function noSubstance(text) {
+/* Is there a business decision in here at all?
+
+   Counting content words was the wrong test, and it let "Tell me a joke"
+   through into a full competitor simulation, because "tell" and "joke" are two
+   perfectly good words. The right test is subject matter: a facade or
+   fenestration decision essentially always names something from this industry,
+   or somebody on the roster, or carries a figure. "Tell me a joke" names
+   nothing and carries nothing.
+
+   Deliberately generous. A false negative is a polite redirect the person can
+   ignore by rephrasing; a false positive is an invented analysis with a
+   confidence score on it. */
+/* A word boundary built from a char code rather than written as an escape.
+
+   Twice now a scripted edit has halved the backslashes in "\\b" inside a
+   RegExp string, once turning it into a backspace character and once into an
+   invalid pattern. Assembling it removes the escape from the source entirely,
+   so no editing tool can damage it. */
+const WB = String.fromCharCode(92) + "b";
+
+const DOMAIN = new RegExp(WB + "(" + [
+  "price","pricing","priced","cost","costs","margin","discount","rebate","quote","quoted","quotation",
+  "tender","bid","bidding","boq","procure","procurement","contract","award","awarded",
+  "compet(e|itor|ition|ing)","rival","undercut","undercutting","market","share","segment",
+  "launch","launching","product","system","systems","range","portfolio",
+  "window","windows","door","doors","facade","facades","curtain ?wall","glazing","glazed","glass",
+  "aluminium","aluminum","profile","profiles","extrusion","billet","lme","thermal","break",
+  "fabricate","fabricator","fabrication","dealer","channel","distributor","installer","install",
+  "architect","architects","consultant","consultants","specifier","specification","spec","specify",
+  "developer","developers","contractor","contractors","builder","client",
+  "supplier","suppliers","supply","sourcing","import","imports","export","tariff","duty","anti ?dumping",
+  "code","codes","standard","standards","bis","cbam","regulation","compliance","certif",
+  "lead ?time","warranty","volume","capacity","tooling","die","investment","factory","plant",
+  "stock","inventory","supply ?chain","logistic","freight","shipment","supply",
+  "enter","entry","expand","expansion","region","geography","launch",
+  "revenue","turnover","growth","forecast","target","strategy","positioning","brand",
+  "customer","customers","buyer","buyers","account","project","projects","tower","residential","commercial"
+// A trailing suffix group, so the list can hold stems rather than every
+// inflection of every word. "price" then covers prices and priced, "fabricate"
+// covers fabrication. Without it "raise prices in India" read as small talk.
+].join("|") + ")(s|es|ed|ing|ion|ions|ors|er|ers)?" + WB, "i");
+
+/* Things that are plainly not this industry, however many words they contain.
+   Checked before the follow up patterns, because "Why so serious" begins with
+   "why" and was being answered as a question about the card above it. */
+const OFF_TOPIC = /\b(joke|jokes|funny|laugh|humour|humor|so serious|lighten up|chill|relax|song|sing|poem|poetry|story|riddle|weather|football|cricket|movie|film|music|recipe|food|lunch|dinner|holiday|weekend|marry|love you|hate you|your name|are you human|are you (a )?(bot|robot|ai)|who made you|meaning of life)\b/i;
+
+const REFERENTIAL = /\b(it|that|this|they|them|those|these|your|you|above|card|answer|read|point|number|figure|round|stage|cascade|assumption|claim|verdict|risk|actor)\b/i;
+
+function looksBusiness(text, ws) {
+  if (DOMAIN.test(text)) return true;
+  if (/\d/.test(text) && /(%|per ?cent|rupee|inr|₹|\$|eur|euro|lakh|crore|per (sq|m2|square|kg|tonne|opening|unit))/i.test(text)) return true;
+  // Anybody named in this workspace counts as subject matter.
+  const names = allNames(ws).concat([(ws.ctx && ws.ctx.company) || ""]).filter(Boolean);
+  return names.some(nm => {
+    const w = String(nm).trim().split(/\s+/)[0];
+    return w.length > 3 && new RegExp(WB + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + WB, "i").test(text);
+  });
+}
+
+/* Returns a reason when there is nothing to simulate, or null to proceed. */
+function noSubstance(text, ws) {
   const t = (text || "").trim();
   if (!t) return "There is nothing here to simulate.";
+  if (OFF_TOPIC.test(t)) return "off topic";
   const words = t.toLowerCase().replace(/[^a-z0-9%₹$ ]+/g, " ").split(/\s+/).filter(Boolean);
-  const content = words.filter(w => w.length > 2 && !FILLER.has(w));
-  if (content.length >= 2) return null;
-  if (words.length && words.every(w => FILLER.has(w)))
-    return "That is a greeting, not a decision.";
-  return "There is not enough in that to react to.";
+  if (!words.length) return "There is nothing here to simulate.";
+  if (words.every(w => FILLER.has(w))) return "That is a greeting, not a decision.";
+  if (ws && !looksBusiness(t, ws)) return "no decision";
+  return null;
 }
 
 /* An auto rewrite of a fact question reads badly, because the grammar rarely
@@ -5119,7 +5180,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-m";
+const BUILD = "2026-08-26-n";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -6116,6 +6177,8 @@ function localSmallTalk(text, ws) {
   if (kind) {
     open = pickSay(kind, text);
     if (kind.id === "greeting" && who) open = open.replace(/[.!]$/, ", " + who + ".");
+  } else if (OFF_TOPIC.test(text)) {
+    open = "Ha. I am better at aluminium than I am at that.";
   } else {
     open = "I am not sure there is a decision in that one yet.";
   }
@@ -6434,12 +6497,30 @@ function submit() {
   // not a new simulation. It skips the clarify and answerability gates, because
   // neither applies to "why do you say that".
   const chat = activeChat();
-  if (looksLikeFollowUp(v, chat)) { $("#ta").value = ""; autosize(); updateSend(); runFollowUp(v, chat); return; }
-  // Substance is checked first and cannot be overridden. Everything downstream,
-  // clarify included, assumes there is a decision in here somewhere to sharpen.
+  const ws0 = activeWs();
+  const gap0 = noSubstance(v, ws0);
+  const clear = () => { $("#ta").value = ""; autosize(); updateSend(); };
+
+  /* Order matters here, and it was wrong.
+
+     The follow up test ran first, and FOLLOWUP begins with "why", so "Why so
+     serious" was answered as a question about the card above it. Plainly off
+     topic now wins over everything: no phrasing turns a joke into a question
+     about a facade cascade. */
+  if (gap0 === "off topic") { clear(); runSmallTalk(v); return; }
+
+  /* And a real follow up refers to what is on screen. Something carrying no
+     business at all and nothing pointing back at the card is not a follow up,
+     whatever word it happens to start with. Very short input is exempt, because
+     "why?" on its own genuinely is one. */
+  if (looksLikeFollowUp(v, chat) &&
+      (looksBusiness(v, ws0) || REFERENTIAL.test(v) || v.split(/\s+/).length <= 3)) {
+    clear(); runFollowUp(v, chat); return;
+  }
+
   // Nothing to simulate is not the same as a mistake. It gets a reply, not a
   // refusal, and the reply invites a decision rather than demanding one.
-  if (noSubstance(v)) { $("#ta").value = ""; autosize(); updateSend(); runSmallTalk(v); return; }
+  if (gap0) { clear(); runSmallTalk(v); return; }
   // Answerability is checked next, because running a call on a question that
   // cannot be answered produces a fluent, confident, invented reply.
   if (!S.overrideAnswerability) {
