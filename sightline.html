@@ -597,6 +597,9 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .clopt:hover{border-color:var(--ink-3)}
 .clopt:active{transform:scale(.97)}
 .clopt.on{background:var(--ink);color:var(--surface);border-color:var(--ink);font-weight:600}
+.clnote{margin-top:10px;font-size:13px;line-height:1.5;color:var(--ink-2);letter-spacing:-.008em}
+.clnote:not(:empty){padding:11px 13px;background:var(--surface-2);border-radius:var(--r-box)}
+.clnote b{color:var(--ink);font-weight:600}
 .clfoot{display:flex;align-items:center;gap:12px;padding-top:2px}
 .clprev{flex:1;font-size:13px;color:var(--ink-3)}
 .clprev.has{color:var(--accent-ink);font-weight:500}
@@ -1431,7 +1434,10 @@ function toast(msg) {
    the user what a good question contains.
    ------------------------------------------------------------ */
 const has = re => (t) => re.test(t);
-const opt = (label, phrase, excl) => ({ label, phrase: phrase || label, excl: !!excl });
+/* `note` explains a label that is jargon. Some of these options are trade terms
+   that read as obvious to whoever wrote them and as nothing at all to the person
+   being asked, which is how a load-bearing choice gets picked by guesswork. */
+const opt = (label, phrase, excl, note) => ({ label, phrase: phrase || label, excl: !!excl, note: note || "" });
 const ROSTER_KEYS = ["rivals", "channel", "customers", "suppliers", "bodies"];
 const namesIn = (ws, key) => (ws.ctx[key] || "").split(",").map(x => x.trim()).filter(Boolean);
 const allNames = ws => ROSTER_KEYS.reduce((a, k) => a.concat(namesIn(ws, k)), [])
@@ -1532,11 +1538,16 @@ const SLOTS = {
     q: "Your price is a price of what?",
     detect: has(/per m|per square|per sq|installed|ex.?works|per opening|per project|per tonne|per kg/i),
     options: () => [
-      opt("Ex works system, per square metre", "Our price is an ex works system price, per square metre."),
-      opt("Installed window, per square metre", "Our price is a finished installed price, per square metre."),
-      opt("Per opening", "Our price is quoted per opening."),
-      opt("Per project", "Our price is quoted per project."),
-      opt("Per kilogram of profile", "Our price is quoted per kilogram of profile.")
+      opt("Ex works system, per square metre", "Our price is an ex works system price, per square metre.", false,
+          "Ex works is the trade term for collected at your factory gate. The buyer pays freight, duty and insurance from there. So this is profiles and hardware only, per square metre of opening, before anyone fabricates, glazes or installs it."),
+      opt("Installed window, per square metre", "Our price is a finished installed price, per square metre.", false,
+          "The finished window in the wall, glass and labour included. In this industry that is roughly three times an ex works system price, which is why the two must never be compared."),
+      opt("Per opening", "Our price is quoted per opening.", false,
+          "One price per window or door regardless of its size."),
+      opt("Per project", "Our price is quoted per project.", false,
+          "A single negotiated number for the whole job, not derived from a rate."),
+      opt("Per kilogram of profile", "Our price is quoted per kilogram of profile.", false,
+          "Priced on aluminium weight, so the number moves with LME and with how heavy the system is.")
     ]
   },
   ourMove: {
@@ -4970,7 +4981,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-f";
+const BUILD = "2026-08-26-g";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -5935,6 +5946,7 @@ function paintClarify() {
 
   const blk = el("div", "clq");
   const row = el("div", "clopts");
+  let noteBox = null, paintNote = null;
 
   if (step.kind === "mode") {
     blk.appendChild(el("div", "clqt", "What are you testing?"));
@@ -5958,6 +5970,9 @@ function paintClarify() {
     opts.forEach(o => {
       const isCustom = o.label === "Someone else";
       const b = el("button", "clopt", o.label);
+      // A title attribute is a desktop affordance and does not exist on a phone,
+      // which is where most of this gets answered, so the note also renders.
+      if (o.note) b.title = o.note;
       if (cur().some(x => x.label === o.label)) b.classList.add("on");
       b.onclick = () => {
         const list = cur();
@@ -5981,12 +5996,27 @@ function paintClarify() {
           }
           if (isCustom) showFree(g);
         }
+        if (paintNote) paintNote();
         paintFoot();
       };
       row.appendChild(b);
     });
+
+    // Explain whichever option is selected, in place, rather than relying on a
+    // hover that half the users cannot perform.
+    if (opts.some(o => o.note)) {
+      noteBox = el("div", "clnote");
+      paintNote = () => {
+        const picked = (st.picked[g.id] || []).map(x => x.label);
+        const shown = opts.filter(o => o.note && picked.includes(o.label));
+        noteBox.innerHTML = shown.length
+          ? shown.map(o => "<b>" + esc(o.label) + ".</b> " + esc(o.note)).join("<br>")
+          : "";
+      };
+    }
   }
   blk.appendChild(row);
+  if (noteBox) { blk.appendChild(noteBox); paintNote(); }
   c.appendChild(blk);
 
   const foot = el("div", "clfoot"); foot.id = "clFoot";
