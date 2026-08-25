@@ -1,6 +1,6 @@
 <meta charset="utf-8">
 <title>Sightline</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="description" content="Test a pricing, launch, tender or competitor decision for facade and fenestration, and see how the market answers.">
 <link rel="manifest" href="./manifest.webmanifest">
 <meta name="theme-color" content="#F5F5F7" media="(prefers-color-scheme: light)">
@@ -102,6 +102,11 @@ body{
   font-family:var(--fs);font-size:15px;line-height:1.55;
   letter-spacing:-.01em;
   -webkit-font-smoothing:antialiased;overflow:hidden;
+  /* Kills the double tap that zooms a whole screen on a mis-tapped button, and
+     with it the 300ms delay browsers hold every tap for while they wait to find
+     out whether a second one is coming. */
+  touch-action:manipulation;
+  -webkit-text-size-adjust:100%;text-size-adjust:100%;
 }
 button,input,textarea,select{font:inherit;color:inherit;letter-spacing:inherit}
 button{cursor:pointer;background:none;border:none;padding:0}
@@ -224,15 +229,22 @@ button{cursor:pointer;background:none;border:none;padding:0}
 .streamin{max-width:748px;margin:0 auto;padding:32px 24px 40px;display:flex;flex-direction:column;gap:26px}
 
 /* ---------- welcome ---------- */
-.welcome{padding:26px 0 4px;text-align:center}
+/* The greeting is the top of the hierarchy. It is set at display size and the
+   invitation sits directly under it, same size, quieter colour, so the two read
+   as one block with a clear first line. Left aligned on purpose: a personal
+   greeting centred on the page reads as a marketing hero rather than as
+   somebody's own screen. */
+.welcome{padding:20px 0 4px;text-align:left}
 .wtag{font-size:14px;font-weight:600;color:var(--accent-ink);margin-bottom:18px;letter-spacing:0}
-.whello{font-size:15px;color:var(--ink-2);margin-bottom:10px}
-.wtitle{
-  font-weight:700;font-size:clamp(30px,7.4vw,50px);line-height:1.05;letter-spacing:-.035em;
-  margin:0 auto 18px;max-width:15ch;text-wrap:balance;
+.whello,.wtitle{
+  font-weight:700;font-size:clamp(29px,7vw,46px);line-height:1.08;letter-spacing:-.036em;
+  margin:0;max-width:17ch;text-wrap:balance;
 }
+.whello{color:var(--ink)}
+.wtitle{color:var(--ink-3);margin:0 0 20px;max-width:25ch}  /* the invitation wants one line */
+.wtitle.solo{color:var(--ink);max-width:15ch}
 .wsub{
-  color:var(--ink-2);max-width:52ch;margin:0 auto 34px;font-size:16.5px;line-height:1.5;
+  color:var(--ink-2);max-width:54ch;margin:0 0 32px;font-size:16.5px;line-height:1.5;
   letter-spacing:-.011em;
 }
 .wsub b{color:var(--ink);font-weight:600}
@@ -979,6 +991,23 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .tk{font-size:12px;font-weight:600;color:var(--ink-3)}
 .tv{font-size:14px;font-weight:600;letter-spacing:-.014em}
 .tgrid.two .tv{font-weight:400;color:var(--ink-2);font-size:13.5px;letter-spacing:-.01em}
+.tpipe{display:flex;flex-direction:column;gap:11px;width:100%;max-width:320px}
+.tstep{display:flex;align-items:flex-start;gap:11px;text-align:left}
+.tnum{
+  width:20px;height:20px;border-radius:50%;flex:0 0 auto;margin-top:1px;
+  background:var(--ink);color:var(--surface);font-size:11px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+}
+.tstext{display:flex;flex-direction:column;gap:1px;min-width:0}
+.tsk{font-size:14px;font-weight:600;letter-spacing:-.015em}
+.tsv{font-size:13px;color:var(--ink-2);line-height:1.4}
+
+/* Google asks that its button carry its own mark, and it reads as more
+   trustworthy than a plain button that happens to say Google. */
+.btn.google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%}
+.btn.google svg{flex:0 0 auto}
+.btn.google:disabled{opacity:.55;cursor:default}
+
 .tdots{display:flex;gap:7px;justify-content:center;margin-bottom:20px}
 .tdotnav{width:7px;height:7px;border-radius:50%;background:var(--line);transition:background .2s,width .2s}
 .tdotnav:hover{background:var(--ink-3)}
@@ -1020,6 +1049,29 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
   .setstat{order:3;margin-left:0}
   .setarrow{margin-left:auto}
 }
+
+
+/* ---------- live field status ---------- */
+.cistatus{min-height:0}
+.cistatus:not(:empty){
+  display:flex;align-items:flex-start;gap:9px;margin-top:8px;padding:10px 12px;
+  border-radius:var(--r-box);background:var(--surface-2);font-size:13.5px;line-height:1.45;
+  animation:fi .2s ease both;
+}
+.cidot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;margin-top:5px;background:var(--ink-3)}
+.citext{flex:1;color:var(--ink-2)}
+.cicount{
+  flex:0 0 auto;font-size:12px;font-weight:700;color:var(--ink-3);
+  background:var(--surface);padding:2px 8px;border-radius:var(--r-pill);
+  font-variant-numeric:tabular-nums;
+}
+.cistatus.ok{background:var(--accent-soft)}
+.cistatus.ok .cidot{background:var(--accent)}
+.cistatus.ok .citext{color:var(--accent-ink)}
+.cistatus.wait .cidot{background:var(--sev-med)}
+.cistatus.bad{background:var(--sev-high-soft)}
+.cistatus.bad .cidot{background:var(--sev-high)}
+.cistatus.bad .citext{color:var(--sev-high)}
 
 /* ---------- responsive ---------- */
 .backdrop{display:none}
@@ -1590,6 +1642,20 @@ const MARKET_PROFILES = {
 
 const behaviourSet = ws => BEHAVIOUR.filter(b => (ws.behaviour || {})[b.id]).length;
 
+/* How many answers now differ from the country profile they started out as.
+
+   Derived rather than stored, so it can never drift out of step with the answers
+   themselves. This exists because changing one answer used to blank the profile
+   name, which made the country look like it had deselected itself. Starting
+   somewhere and then correcting it is the normal way to use this, not a reason
+   to forget where you started. */
+function behaviourEdits(ws) {
+  const src = MARKET_PROFILES[ws.behaviourSource];
+  if (!src) return 0;
+  const cur = ws.behaviour || {};
+  return BEHAVIOUR.filter(b => (cur[b.id] || "") !== (src[b.id] || "")).length;
+}
+
 function behaviourLines(ws) {
   const bh = ws.behaviour || {};
   const out = [];
@@ -1980,7 +2046,7 @@ function save() {
   clearTimeout(saveTimer);
   clearTimeout(autoSyncTimer);
   const g = S.gsync;
-  if (g && g.clientId && g.auto && g.token) {
+  if (g && clientId() && g.auto && g.token) {
     // Quiet background push, well after the user has stopped typing.
     autoSyncTimer = setTimeout(() => {
       gSync().then(r => { if (r && r.did === "conflict") setSyncBadge("conflict"); else setSyncBadge("ok"); })
@@ -3807,15 +3873,23 @@ function renderStream() {
 function renderWelcome(box) {
   const ws = activeWs();
   const w = el("div", "welcome");
-  w.appendChild(el("div", "wtag", "Pricing, launches, tenders, competitors, costs and codes"));
-  const t = el("h1", "wtitle"); t.textContent = "See how the market will react, before you decide.";
-  w.appendChild(t);
-  if ((S.userName || "").trim()) {
-    const hi = el("div", "whello", "Hello, " + S.userName.trim() + ".");
-    w.insertBefore(hi, w.firstChild.nextSibling);
+
+  // The name takes the largest slot on the screen. Without one, the proposition
+  // takes that slot instead, so the page never opens on a smaller heading than
+  // it would otherwise have had.
+  const name = (S.userName || "").trim();
+  if (name) {
+    const hi = el("h1", "whello"); hi.textContent = "Hello, " + name;
+    w.appendChild(hi);
+    w.appendChild(el("div", "wtitle", "What are you weighing up?"));
+  } else {
+    const t = el("h1", "wtitle solo");
+    t.textContent = "See how the market will react, before you decide.";
+    w.appendChild(t);
   }
+
   const s = el("p", "wsub");
-  s.innerHTML = "Tell it what you are thinking of doing. It works out who reacts, what they do about it, and what that turns into a few months later. Built for <b>aluminium systems, glass and the building envelope</b>.";
+  s.innerHTML = "Describe a price, a launch, a tender, a competitor, a cost shock or a code change. It works out who reacts, what they do about it, and what that turns into a few months later. Built for <b>aluminium systems, glass and the building envelope</b>.";
   w.appendChild(s);
 
   const grid = el("div", "seedgrid");
@@ -3947,13 +4021,27 @@ async function run(text, useMode) {
    SHEETS
    ============================================================ */
 function openSheet(title, build) {
-  const sh = $("#sheet"); sh.innerHTML = "";
+  const sh = $("#sheet");
+
+  // Every option in a sheet updates by rebuilding the whole sheet. Without this,
+  // pressing one option throws you back to the top of a long one, which reads as
+  // the entire thing having reset rather than one answer having changed. Only
+  // restore when the same sheet is already open, so opening a different one
+  // still starts at the top where it should.
+  // The scroller is the sheet itself. The body inside it is full height with
+  // visible overflow, so reading scrollTop off that would always return zero.
+  const prevTitle = sh.querySelector(".shead h2");
+  const same = $("#scrim").classList.contains("on") && prevTitle && prevTitle.textContent === title;
+  const keep = same ? sh.scrollTop : 0;
+
+  sh.innerHTML = "";
   const h = el("div", "shead");
   h.appendChild(el("h2", "", title));
   const x = el("button", "iconbtn");
   x.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
   x.onclick = closeSheet; h.appendChild(x); sh.appendChild(h);
   const b = el("div", "sbody"); build(b); sh.appendChild(b);
+  if (keep) sh.scrollTop = keep;
   $("#scrim").classList.add("on");
 }
 const closeSheet = () => $("#scrim").classList.remove("on");
@@ -3961,44 +4049,49 @@ const closeSheet = () => $("#scrim").classList.remove("on");
 /* ------------------------------------------------------------
    ONBOARDING
 
-   Five screens, and each one earns its place by teaching something
-   a person would otherwise get wrong on their first try: that it
-   reasons rather than looks things up, that it will ask before
-   answering a vague question, that the context pack is what makes
-   answers specific, and that a key and sync are optional rather
-   than required. Every screen can be skipped.
+   Seven screens, and three of them ask for something rather than
+   only explaining. A tour that only talks leaves the person back on
+   an empty screen with no name, no account and no key, which is the
+   worst possible starting state and exactly where they began.
+
+   Order is deliberate: name, then what it does, then sign in, then
+   the key. Sign in comes before the key because it is one button and
+   it can bring a returning person's whole account back, which makes
+   every screen after it unnecessary for them.
+
+   Everything is skippable. None of it is required to use the app.
    ------------------------------------------------------------ */
 const TOUR = [
-  {
-    tag: "What this is",
-    title: "It works out how people will react.",
-    body: "You describe a move you are considering. A price, a launch, a tender, a competitor, a cost shock, a code change. It works out who reacts, what they do about it, and what that turns into a few months later.",
-    art: "cascade"
-  },
-  {
-    tag: "How to read an answer",
-    title: "The end is rarely the same problem as the start.",
-    body: "Every answer plays out over three stages. A price cut looks like a margin problem on day one. A quarter later it is a channel problem. A year later it is a specification problem. That drift is the thing worth seeing, and a single answer from a chatbot stops at the first one.",
-    art: "stages"
-  },
-  {
-    tag: "It will ask you things",
-    title: "A vague question gets a vague answer, so it asks first.",
-    body: "If you leave out who, where, or over what period, it stops and asks before spending anything. Your half sentence is visibly rewritten into a proper brief, which is also how you learn what a good question looks like.",
-    art: "ask"
-  },
-  {
-    tag: "What makes it yours",
-    title: "Tell it who you are, once.",
-    body: "Your company, your market, real competitor names, your price anchor, and how buying actually works where you sell. That context goes into every simulation, and it is the whole difference between an answer about you and an answer about any company anywhere.",
-    art: "context"
-  },
-  {
-    tag: "Optional, both of them",
-    title: "A key to run live. Drive to sync.",
-    body: "Without a key it runs in demo mode with real prepared examples. Add your own Gemini key and it runs live, using no web search, so it costs a fraction of a rupee. Sign in with Google and your work follows you between your phone and your laptop, stored in your own Drive where only this app can see it.",
-    art: "optional"
-  }
+  { kind:"say", tag:"What this is",
+    title:"It works out how people will react.",
+    body:"Describe a move you are considering. A price, a launch, a tender, a competitor, a cost shock, a code change. It works out who reacts, what they do about it, and what that turns into a few months later.",
+    art:"cascade" },
+
+  { kind:"name", tag:"First, your name",
+    title:"What should it call you?",
+    body:"Used to greet you here and to sign anything you export. It is never sent to the model, and you can change it in Settings whenever you like." },
+
+  { kind:"say", tag:"How to read an answer",
+    title:"The end is rarely the same problem as the start.",
+    body:"Every answer plays out over three stages. A price cut looks like a margin problem on day one. A quarter later it is a channel problem. A year later it is a specification problem. That drift is the thing worth seeing, and a single answer from a chatbot stops at the first one.",
+    art:"stages" },
+
+  { kind:"say", tag:"What happens when you ask",
+    title:"Four steps, every time.",
+    body:"It reads your question and works out what kind of decision it is. It checks whether anything important is missing and asks you rather than guessing. It runs the reaction using what you have told it about your market. Then it hands back an answer shaped for that decision, and three questions worth asking next.",
+    art:"pipeline" },
+
+  { kind:"signin", tag:"Optional",
+    title:"Keep your work on every device.",
+    body:"Sign in and your workspaces, simulations and saved signals live in your own Google Drive, as one file this app creates. It can touch that file and nothing else of yours. Skip it and everything still works, it simply stays on this device." },
+
+  { kind:"key", tag:"Optional, and nearly free",
+    title:"Add a key to run it for real.",
+    body:"Without one you are in demo mode: real prepared simulations, fully explorable, nothing generated. With one, every answer is worked out from your own context. It never searches the web, which is the expensive part of this API, so a simulation costs a fraction of a rupee." },
+
+  { kind:"context", tag:"Last thing",
+    title:"Tell it who you are.",
+    body:"Your company, your market and your real competitors are what separate an answer about you from an answer about any company anywhere. This matters more than the key does." }
 ];
 
 function tourArt(kind) {
@@ -4015,77 +4108,184 @@ function tourArt(kind) {
       sp.appendChild(row);
     });
     w.appendChild(sp);
+  } else if (kind === "pipeline") {
+    const p = el("div", "tpipe");
+    [["Reads", "what kind of decision this is"],
+     ["Asks", "anything important you left out"],
+     ["Runs", "the reaction, using your market"],
+     ["Hands back", "an answer shaped for that decision"]].forEach((x, i) => {
+      const row = el("div", "tstep");
+      row.appendChild(el("span", "tnum", String(i + 1)));
+      const t = el("div", "tstext");
+      t.appendChild(el("span", "tsk", x[0]));
+      t.appendChild(el("span", "tsv", x[1]));
+      row.appendChild(t);
+      p.appendChild(row);
+    });
+    w.appendChild(p);
   } else if (kind === "ask") {
     const q = el("div", "tchips");
     ["Which competitor?", "Reynaers", "Low cost imports", "Not one in particular"].forEach((t, i) => {
       q.appendChild(el("span", "tchip" + (i === 0 ? " q" : i === 1 ? " on" : ""), t));
     });
     w.appendChild(q);
-  } else if (kind === "context") {
-    const g = el("div", "tgrid");
-    [["Company", "Schüco India"], ["Market", "India, premium"], ["Competitors", "Reynaers, Aluk"], ["Buying works by", "Lowest price wins"]]
-      .forEach(([k, v]) => {
-        const c = el("div", "tcell");
-        c.appendChild(el("span", "tk", k));
-        c.appendChild(el("span", "tv", v));
-        g.appendChild(c);
-      });
-    w.appendChild(g);
-  } else {
-    const g = el("div", "tgrid two");
-    [["Demo mode", "No key. Real prepared examples."], ["Live mode", "Your key. Fractions of a rupee."],
-     ["This device", "Everything stays in the browser."], ["With Drive", "Same work on phone and laptop."]]
-      .forEach(([k, v]) => {
-        const c = el("div", "tcell");
-        c.appendChild(el("span", "tk", k));
-        c.appendChild(el("span", "tv", v));
-        g.appendChild(c);
-      });
-    w.appendChild(g);
   }
   return w;
 }
 
+/* Google's own mark, so the button is recognisable as a Google button rather
+   than a button that mentions Google. */
+function googleMark() {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("viewBox", "0 0 48 48");
+  s.setAttribute("width", "18"); s.setAttribute("height", "18");
+  s.innerHTML =
+    '<path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.4 6.6v5.5h7.1c4.2-3.8 6.6-9.5 6.6-16.1z"/>' +
+    '<path fill="#34A853" d="M24 46c6 0 11-2 14.5-5.4l-7.1-5.5c-2 1.3-4.5 2.1-7.4 2.1-5.7 0-10.6-3.9-12.3-9.1H4.3v5.7C7.8 41.1 15.3 46 24 46z"/>' +
+    '<path fill="#FBBC05" d="M11.7 28.1c-.4-1.3-.7-2.7-.7-4.1s.2-2.8.7-4.1v-5.7H4.3C2.8 17.1 2 20.5 2 24s.8 6.9 2.3 9.8l7.4-5.7z"/>' +
+    '<path fill="#EA4335" d="M24 10.8c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 4.2 30 2 24 2 15.3 2 7.8 6.9 4.3 14.2l7.4 5.7c1.7-5.2 6.6-9.1 12.3-9.1z"/>';
+  return s;
+}
+
 function openTour(startAt) {
   let i = startAt || 0;
-  const paint = () => {
+  const go = n => { i = n; paint(); };
+  const finish = () => { S.tourDone = true; save(); closeSheet(); renderRail(); renderStream(); };
+
+  function paint() {
     const step = TOUR[i];
-    // openSheet builds the body before attaching it, so parentElement is null in
-    // here. The title is passed in rather than reached for.
-    openSheet("How this works", s => {
+    openSheet("Getting started", s => {
       const box = el("div", "tour");
       box.appendChild(el("div", "wtag", step.tag));
-      box.appendChild(tourArt(step.art));
+      if (step.art) box.appendChild(tourArt(step.art));
       const h = el("h2", "tourttl"); h.textContent = step.title; box.appendChild(h);
       box.appendChild(el("p", "tourbody", step.body));
+
+      if (step.kind === "name") stepName(box);
+      if (step.kind === "signin") stepSignIn(box);
+      if (step.kind === "key") stepKey(box);
+      if (step.kind === "context") stepContext(box);
 
       const dots = el("div", "tdots");
       TOUR.forEach((_, n) => {
         const d = el("button", "tdotnav" + (n === i ? " on" : ""));
         d.title = TOUR[n].tag;
-        d.onclick = () => { i = n; paint(); };
+        d.onclick = () => go(n);
         dots.appendChild(d);
       });
       box.appendChild(dots);
 
       const row = el("div", "btnrow");
-      if (i > 0) { const b = el("button", "btn", "Back"); b.onclick = () => { i--; paint(); }; row.appendChild(b); }
-      const skip = el("button", "btn", i === TOUR.length - 1 ? "Close" : "Skip");
-      skip.onclick = () => { S.tourDone = true; save(); closeSheet(); };
+      if (i > 0) { const b = el("button", "btn", "Back"); b.onclick = () => go(i - 1); row.appendChild(b); }
+      const last = i === TOUR.length - 1;
+      const skip = el("button", "btn", last ? "Not now" : "Skip");
+      skip.onclick = finish;
       row.appendChild(skip);
-      if (i < TOUR.length - 1) {
-        const n = el("button", "btn pri", "Next");
-        n.onclick = () => { i++; paint(); };
-        row.appendChild(n);
-      } else {
-        const done = el("button", "btn pri", "Set up my workspace");
-        done.onclick = () => { S.tourDone = true; save(); closeSheet(); openWorkspace(activeWs().id); };
-        row.appendChild(done);
-      }
+      if (!last) { const n = el("button", "btn pri", "Next"); n.onclick = () => go(i + 1); row.appendChild(n); }
       box.appendChild(row);
       s.appendChild(box);
     });
-  };
+  }
+
+  function stepName(box) {
+    const f = el("div", "fld");
+    const inp = el("input");
+    inp.placeholder = "Your first name is plenty";
+    inp.value = S.userName || "";
+    inp.oninput = () => { S.userName = inp.value.slice(0, 40); save(); };
+    inp.onkeydown = e => { if (e.key === "Enter" && i < TOUR.length - 1) go(i + 1); };
+    f.appendChild(inp);
+    box.appendChild(f);
+    setTimeout(() => inp.focus(), 80);
+  }
+
+  function stepSignIn(box) {
+    const f = el("div", "fld");
+    const g = gsync();
+    const canSync = location.protocol === "https:" || location.hostname === "localhost";
+
+    if (!canSync || !clientId()) {
+      f.appendChild(el("div", "hint", !canSync
+        ? "Google will not accept a sign in from a file opened directly, or from a preview pane. Open the hosted version and this appears."
+        : "Sign in is not set up for this copy of the app. Everything else works, and your data stays on this device."));
+      box.appendChild(f); return;
+    }
+
+    const st = el("div", "cistatus");
+    const setSt = (state, msg) => {
+      st.className = "cistatus " + state;
+      st.innerHTML = '<span class="cidot"></span><span class="citext">' + msg + "</span>";
+    };
+    if (g.token) setSt("ok", "Signed in. Your work is being kept in your Drive.");
+
+    const b = el("button", "btn google");
+    b.appendChild(googleMark());
+    b.appendChild(el("span", "", g.token ? "Signed in" : "Continue with Google"));
+    b.disabled = !!g.token;
+    b.onclick = async () => {
+      b.disabled = true; b.lastChild.textContent = "Waiting for Google…";
+      try {
+        await gSignIn(true);
+        const r = await gSync();
+        // A returning person's data comes back here, which is the entire point of
+        // putting sign in before the two screens that ask them to type things.
+        if (r.did === "pulled") {
+          setSt("ok", "Signed in, and your existing work came back.");
+          renderRail(); renderStream();
+        } else if (r.did === "conflict") {
+          setSt("wait", "Signed in. There are two versions of your data, so Settings will ask which to keep.");
+        } else {
+          setSt("ok", "Signed in. Everything from here on is kept in your Drive.");
+        }
+        setSyncBadge("ok");
+        b.lastChild.textContent = "Signed in";
+      } catch (e) {
+        const msg = e.message || "Unknown error";
+        setSt("bad", esc(msg) + signInHelp(msg));
+        b.disabled = false; b.lastChild.textContent = "Try again";
+      }
+    };
+    f.appendChild(b);
+    f.appendChild(st);
+    f.appendChild(el("div", "hint", "It asks for one permission: to manage the single file it creates. It cannot see anything else in your Drive."));
+    box.appendChild(f);
+  }
+
+  function stepKey(box) {
+    const f = el("div", "fld");
+    const inp = el("input");
+    inp.type = "password";
+    inp.placeholder = "Paste a Gemini key, or skip";
+    inp.value = S.key || "";
+    const st = el("div", "cistatus");
+    const paint2 = () => {
+      if (!S.key) { st.className = "cistatus"; st.innerHTML = ""; return; }
+      st.className = "cistatus ok";
+      st.innerHTML = '<span class="cidot"></span><span class="citext">Saved on this device. Settings can test it against Google whenever you want.</span>';
+    };
+    inp.oninput = () => { S.key = inp.value.trim(); save(); paint2(); };
+    paint2();
+    f.appendChild(inp); f.appendChild(st);
+    f.appendChild(el("div", "hint", "Free from <b>aistudio.google.com</b>. It is stored in this browser only, sent to Google and to nobody else, and deliberately left out of the Drive sync."));
+    box.appendChild(f);
+  }
+
+  function stepContext(box) {
+    const ws = activeWs();
+    const missing = ctxMissing(ws);
+    const f = el("div", "fld");
+    const st = el("div", "cistatus " + (missing.length ? "wait" : "ok"));
+    st.innerHTML = '<span class="cidot"></span><span class="citext">' +
+      (missing.length ? "Still blank: " + esc(missing.join(", ")).toLowerCase() + "."
+                      : "Everything it needs about you is filled in.") + "</span>";
+    f.appendChild(st);
+    const b = el("button", "btn pri", missing.length ? "Set up my workspace" : "Review my workspace");
+    b.onclick = () => { S.tourDone = true; save(); openWorkspace(ws.id); };
+    f.appendChild(b);
+    f.appendChild(el("div", "hint", "It starts filled in for Schüco India as a worked example. Change it to yours, or start a fresh workspace from the sidebar."));
+    box.appendChild(f);
+  }
+
   paint();
 }
 
@@ -4338,8 +4538,13 @@ function openWorkspace(id) {
     const bset = behaviourSet(ws);
     const bh = el("div", "notice");
     bh.style.borderColor = bset ? "var(--line)" : "var(--sev-med)";
-    bh.innerHTML = "<span><b>How buying works here.</b> " + (bset === BEHAVIOUR.length ? "All " + BEHAVIOUR.length + " answered. " : bset + " of " + BEHAVIOUR.length + " answered. ") +
-      (ws.behaviourSource ? "Started from the " + esc(ws.behaviourSource) + " profile. Correct anything that is wrong for you, because a starting profile is a guess about your market and you are not." 
+    const bedit = behaviourEdits(ws);
+    bh.innerHTML = "<span><b>How buying works here.</b> " +
+      "Eight questions. Pick a country to fill all eight from a profile, then correct the ones that are wrong for you. " +
+      (bset === BEHAVIOUR.length ? "All " + BEHAVIOUR.length + " answered. " : bset + " of " + BEHAVIOUR.length + " answered. ") +
+      (ws.behaviourSource
+        ? "Started from the <b>" + esc(ws.behaviourSource) + "</b> profile" +
+          (bedit ? ", with " + bedit + (bedit === 1 ? " answer" : " answers") + " changed since." : ". A profile is a guess about your market and you are not, so correct anything that is wrong.")
         : "This is what makes the same question answer differently in Mumbai and in Munich. Without it the model applies a generic assumption.") + "</span>";
     s.appendChild(bh);
 
@@ -4366,7 +4571,9 @@ function openWorkspace(id) {
           ws.behaviour = ws.behaviour || {};
           if (ws.behaviour[bq.id] === label) delete ws.behaviour[bq.id];
           else ws.behaviour[bq.id] = label;
-          ws.behaviourSource = "";
+          // The profile it started from is kept. Correcting one answer is not a
+          // reason to forget the country, and blanking it here read as the
+          // country deselecting itself the moment you touched anything.
           save(); openWorkspace(id);
         };
         row.appendChild(b);
@@ -4493,7 +4700,31 @@ function applyProfile(ws, id, md) {
    Conflicts are resolved by asking. Silently overwriting a day of
    someone's work to avoid a dialogue is not a trade worth making.
    ============================================================ */
-const GDRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
+/* The OAuth client this app ships with.
+
+   A client ID is not a secret. It is designed to be public and to sit in the
+   page. That is the whole reason the console work belongs to whoever publishes
+   the app, once, and not to every person who opens it. Asking each user to
+   create their own OAuth client was the wrong shape: it is developer setup, and
+   it was being handed to the wrong person.
+
+   Anyone self hosting on a different origin can still set their own in Settings,
+   which is why the override below survives. */
+const APP_CLIENT_ID = "";
+const clientId = () => (APP_CLIENT_ID || (gsync().clientId || "")).trim();
+
+/* drive.file, not drive.appdata.
+
+   Both keep this app out of the rest of someone's Drive. The difference is what
+   Google asks of the publisher: drive.appdata is a sensitive scope, so shipping
+   it to the public needs a verification review, and until that clears only
+   hand-added test users can sign in. drive.file is not sensitive, so the consent
+   screen can be published and anyone can sign in straight away.
+
+   The cost is that the file is visible in the person's Drive rather than hidden,
+   which they could delete. Being visible is arguably the more honest of the two
+   anyway, and it is a fair price for a sign-in that works for everyone. */
+const GDRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const GDRIVE_FILE = "sightline-data.json";
 let gisReady = false, tokenClient = null;
 
@@ -4545,13 +4776,13 @@ function gToken() {
 
 async function gSignIn(interactive) {
   const g = gsync();
-  if (!g.clientId) throw new Error("No client ID set. Add one in Settings first.");
+  if (!clientId()) throw new Error("No sign in is configured for this copy of the app.");
   const ok = await loadGIS();
   if (!ok || !window.google || !google.accounts) throw new Error("Could not reach Google sign in. Check your connection, or an extension may be blocking it.");
   return new Promise((res, rej) => {
     try {
       tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: g.clientId,
+        client_id: clientId(),
         scope: GDRIVE_SCOPE,
         callback: r => {
           if (r && r.access_token) {
@@ -4588,11 +4819,15 @@ async function gFetch(url, opts) {
 
 async function gFindFile() {
   const g = gsync();
-  const r = await gFetch("https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name,modifiedTime)&pageSize=20");
+  // Under drive.file this listing can only ever return files this app created,
+  // so there is no folder to scope it to and nothing of theirs to sift through.
+  const q = encodeURIComponent("name = '" + GDRIVE_FILE + "' and trashed = false");
+  const r = await gFetch("https://www.googleapis.com/drive/v3/files?q=" + q +
+    "&fields=files(id,name,modifiedTime)&pageSize=20&orderBy=modifiedTime desc");
   const j = await r.json();
-  const f = (j.files || []).find(x => x.name === GDRIVE_FILE);
+  const f = (j.files || [])[0] || null;
   g.fileId = f ? f.id : "";
-  return f || null;
+  return f;
 }
 
 async function gPush() {
@@ -4602,7 +4837,7 @@ async function gPush() {
     if (!g.fileId) {
       const r = await gFetch("https://www.googleapis.com/drive/v3/files", {
         method:"POST", headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ name: GDRIVE_FILE, parents:["appDataFolder"] })
+        body: JSON.stringify({ name: GDRIVE_FILE, mimeType:"application/json" })
       });
       g.fileId = (await r.json()).id;
     }
@@ -4675,7 +4910,7 @@ const SETTINGS_PAGES = [
 function settingsRowStatus(id) {
   const g = S.gsync || {};
   if (id === "key") return S.key ? "Key set" : "Demo mode";
-  if (id === "sync") return g.token ? "On" : (g.clientId ? "Set up, not signed in" : "Off");
+  if (id === "sync") return g.token ? "On" : (clientId() ? "Not signed in" : "Unavailable");
   if (id === "you") return (S.userName || "").trim() || "Not set";
   if (id === "data") return stateSizeKb() + " KB stored";
   return "";
@@ -4849,14 +5084,50 @@ function pageSync(s) {
   const n = el("div", "notice");
   n.innerHTML = g.token
     ? "<span><b>Sync is on.</b> Last synced " + esc(g.lastSync ? new Date(g.lastSync).toLocaleString() : "never") + "."
-      + " Your data sits in your own Drive, in a folder only this app can open.</span>"
-    : "<span>Your work follows you between devices, stored in <b>your own Google Drive</b> in a private folder only this app can see. Your other files stay invisible to it. There is no server in this, and nothing passes through anyone else.</span>";
+      + " Your work sits in your own Drive as a single file named <b>" + esc(GDRIVE_FILE) + "</b>.</span>"
+    : "<span>Your work follows you between devices, stored in <b>your own Google Drive</b> as a single file this app creates. It can read and write that one file and nothing else of yours. There is no server in this, and nothing passes through anyone else.</span>";
   s.appendChild(n);
 
+  // Nothing to configure when the app ships its own client, which is the normal
+  // case. The console walkthrough only appears for somebody self hosting on
+  // their own origin, who has to bring their own.
+  if (!APP_CLIENT_ID) selfHostSetup(s, g);
+
+  const out = el("div");
+  const row = el("div", "btnrow");
+  const bIn = el("button", "btn pri", g.token ? "Sync now" : "Continue with Google");
+  bIn.onclick = async () => {
+    if (!clientId()) { out.innerHTML = ""; const e2 = el("div", "err"); e2.innerHTML = "<b>Sign in is not configured for this copy.</b> The setup notes above cover it."; out.appendChild(e2); return; }
+    bIn.textContent = "Working…"; bIn.disabled = true; out.innerHTML = "";
+    try {
+      if (!gToken()) await gSignIn(true);
+      const r = await gSync();
+      if (r.did === "conflict") { renderConflict(out, r); }
+      else {
+        const ok = el("div", "notice"); ok.style.borderColor = "var(--accent)";
+        const w = { pushed:"Sent to Drive", pulled:"Brought down from Drive", same:"Already in sync" };
+        ok.innerHTML = "<span><b>" + (w[r.did] || "Done") + ".</b> " + esc(r.reason) + ".</span>";
+        out.appendChild(ok);
+        if (r.did === "pulled") { renderRail(); renderStream(); }
+        setSyncBadge("ok");
+      }
+    } catch (e) {
+      const msg = e.message || "Unknown error";
+      const e2 = el("div", "err");
+      e2.innerHTML = "<b>That did not work.</b> " + esc(msg) + signInHelp(msg);
+      out.appendChild(e2); setSyncBadge("error");
+    }
+    bIn.textContent = gToken() ? "Sync now" : "Continue with Google"; bIn.disabled = false;
+  };
+  row.appendChild(bIn);
+  syncTail(s, g, row, out);
+}
+
+function selfHostSetup(s, g) {
   const setup = el("details", "gaps"); setup.style.borderTop = "none";
   const sm = el("summary");
   sm.appendChild(el("span", "tw", "›"));
-  sm.appendChild(el("span", "", g.clientId ? "Change the Google setup" : "Set this up, about five minutes"));
+  sm.appendChild(el("span", "", g.clientId ? "Change the Google setup" : "Bring your own Google client"));
   setup.appendChild(sm);
   const steps = el("div", "gaplist");
   const st = el("div", "confbox");
@@ -4879,62 +5150,70 @@ function pageSync(s) {
   const ci = el("input");
   ci.placeholder = "Ends in .apps.googleusercontent.com";
   ci.value = g.clientId || "";
-  const ciWarn = el("div", "hint");
+  // Live feedback, not help text. It has to look like it is reacting, or it reads
+  // as a fixed paragraph that happens to mention a number.
+  const ciWarn = el("div", "cistatus");
   const checkCi = () => {
     const v = (g.clientId || "").trim();
-    if (!v) { ciWarn.textContent = ""; ciWarn.style.color = ""; return; }
+    ciWarn.className = "cistatus";
+    if (!v) { ciWarn.innerHTML = ""; return; }
     const SUF = ".apps.googleusercontent.com";
-    const bad = m => { ciWarn.innerHTML = m; ciWarn.style.color = "var(--sev-med)"; };
-    if (/…|\.\.\./.test(v)) return bad("That has an ellipsis in it, so it is the shortened version the console displays rather than the whole ID. Use the copy button beside it.");
-    if (/^GOCSPX/i.test(v)) return bad("That is a client <b>secret</b>. You want the value ending in <b>" + SUF + "</b>.");
-    if (v.indexOf(SUF) === -1) return bad("That does not end in <b>" + SUF + "</b>, which every client ID does.");
+    const set = (state, msg) => {
+      ciWarn.className = "cistatus " + state;
+      ciWarn.innerHTML = '<span class="cidot"></span><span class="citext">' + msg +
+        '</span><span class="cicount">' + v.length + '</span>';
+    };
+    if (/…|\.\.\./.test(v)) return set("bad", "That is the shortened version the console displays. Use the copy button beside it.");
+    if (/\s/.test(v)) return set("bad", "There is a space or line break in it. Copy it again.");
+    if (/^GOCSPX/i.test(v)) return set("bad", "That is the client <b>secret</b>. You want the one ending in " + SUF);
+    if (!v.endsWith(SUF)) return set("wait", "Keep going. It should end in " + SUF);
     const head = v.slice(0, v.length - SUF.length);
-    if (!/^\d{8,}-[A-Za-z0-9_]{10,}$/.test(head)) return bad("The part before " + SUF + " looks incomplete. Yours is " + head.length + " characters. Copy it again with the copy button.");
-    ciWarn.innerHTML = "Looks complete. " + v.length + " characters, project number <b>" + esc(head.split("-")[0]) + "</b>.";
-    ciWarn.style.color = "";
+    // Real IDs are a project number, a dash, then a random section that may itself
+    // contain hyphens and underscores. An earlier pattern excluded hyphens and
+    // wrongly rejected valid IDs.
+    if (!/^\d{6,}-[A-Za-z0-9_-]{6,}$/.test(head)) return set("bad", "The part before " + SUF + " does not look like a project number followed by a random section.");
+    set("ok", "Looks complete. Project number <b>" + esc(head.split("-")[0]) + "</b>.");
   };
   ci.oninput = () => { g.clientId = ci.value.trim(); save(); checkCi(); };
   f.appendChild(ci); f.appendChild(ciWarn); checkCi();
   s.appendChild(f);
+}
 
-  const out = el("div");
-  const row = el("div", "btnrow");
-  const bIn = el("button", "btn pri", g.token ? "Sync now" : "Sign in and sync");
-  bIn.onclick = async () => {
-    if (!g.clientId) { out.innerHTML = ""; const e2 = el("div", "err"); e2.innerHTML = "<b>Paste your Client ID first.</b> The setup notes above walk you through getting one."; out.appendChild(e2); return; }
-    bIn.textContent = "Working…"; bIn.disabled = true; out.innerHTML = "";
-    try {
-      if (!gToken()) await gSignIn(true);
-      const r = await gSync();
-      if (r.did === "conflict") {
-        const c = el("div", "err");
-        c.innerHTML = "<b>Both copies changed since the last sync.</b> This device holds " + r.localCounts.w +
-          " workspaces and " + r.localCounts.c + " simulations, last changed " + esc(new Date(r.localAt).toLocaleString()) +
-          ". Drive holds " + r.remoteCounts.w + " and " + r.remoteCounts.c + ", last changed " +
-          esc(new Date(r.remoteAt).toLocaleString()) + ". Export first if you are unsure.";
-        const fx = el("div", "fix");
-        const mine = el("button", "", "Keep this device");
-        mine.onclick = async () => { await gSync({ resolve:"mine" }); openSettingsPage("sync"); toast("Drive now matches this device"); };
-        const theirs = el("button", "", "Take the Drive copy");
-        theirs.onclick = async () => { await gSync({ resolve:"theirs" }); renderRail(); renderStream(); openSettingsPage("sync"); toast("This device now matches Drive"); };
-        fx.appendChild(mine); fx.appendChild(theirs); c.appendChild(fx);
-        out.appendChild(c);
-      } else {
-        const ok = el("div", "notice"); ok.style.borderColor = "var(--accent)";
-        const w = { pushed:"Sent to Drive", pulled:"Brought down from Drive", same:"Already in sync" };
-        ok.innerHTML = "<span><b>" + (w[r.did] || "Done") + ".</b> " + esc(r.reason) + ".</span>";
-        out.appendChild(ok);
-        if (r.did === "pulled") { renderRail(); renderStream(); }
-        setSyncBadge("ok");
-      }
-    } catch (e) {
-      const e2 = el("div", "err");
-      e2.innerHTML = "<b>That did not work.</b> " + esc(e.message || "Unknown error");
-      out.appendChild(e2); setSyncBadge("error");
-    }
-    bIn.disabled = false; bIn.textContent = gToken() ? "Sync now" : "Sign in and sync";
-  };
-  row.appendChild(bIn);
+/* Both copies moved since the last sync, so there is no correct answer to pick
+   silently. Show what each side actually holds and let them choose. */
+function renderConflict(out, r) {
+  const c = el("div", "err");
+  c.innerHTML = "<b>Both copies changed since the last sync.</b> This device holds " + r.localCounts.w +
+    " workspaces and " + r.localCounts.c + " simulations, last changed " + esc(new Date(r.localAt).toLocaleString()) +
+    ". Drive holds " + r.remoteCounts.w + " and " + r.remoteCounts.c + ", last changed " +
+    esc(new Date(r.remoteAt).toLocaleString()) + ". Export first if you are unsure.";
+  const fx = el("div", "fix");
+  const mine = el("button", "", "Keep this device");
+  mine.onclick = async () => { await gSync({ resolve:"mine" }); openSettingsPage("sync"); toast("Drive now matches this device"); };
+  const theirs = el("button", "", "Take the Drive copy");
+  theirs.onclick = async () => { await gSync({ resolve:"theirs" }); renderRail(); renderStream(); openSettingsPage("sync"); toast("This device now matches Drive"); };
+  fx.appendChild(mine); fx.appendChild(theirs); c.appendChild(fx);
+  out.appendChild(c);
+}
+
+/* Google returns these as bare codes, which tell the person nothing. Each one has
+   exactly one cause worth naming, and naming it is the difference between a fix
+   and a dead end. */
+function signInHelp(msg) {
+  const m = String(msg || "").toLowerCase();
+  if (m.indexOf("invalid_client") > -1)
+    return " This copy of the app is not authorised for <b>" + esc(location.origin) +
+           "</b>. That is something the publisher fixes, not you.";
+  if (m.indexOf("access_denied") > -1 || m.indexOf("denied") > -1)
+    return " You closed the Google window or declined. Nothing was changed.";
+  if (m.indexOf("popup") > -1)
+    return " Your browser blocked the Google window. Allow popups for this site and press it again.";
+  return "";
+}
+
+/* The sign out control and the sync timing option, shared by both routes into
+   this page so they cannot drift apart. */
+function syncTail(s, g, row, out) {
   if (g.token) {
     const bOut = el("button", "btn", "Sign out");
     bOut.onclick = () => { g.token = ""; g.tokenExp = 0; save(); openSettingsPage("sync"); toast("Signed out here. Nothing was deleted from Drive."); };
@@ -5147,7 +5426,7 @@ function setSyncBadge(state) {
   const b = $("#btnSync"), d = $("#syncDot"), l = $("#syncLabel");
   if (!b) return;
   const g = S.gsync;
-  if (!g || !g.clientId || !g.token) { b.hidden = true; return; }
+  if (!g || !clientId() || !g.token) { b.hidden = true; return; }
   b.hidden = false;
   d.className = "syncdot " + state;
   l.textContent = state === "ok" ? "Synced" : state === "conflict" ? "Two copies differ" : state === "syncing" ? "Syncing" : "Sync problem";
@@ -5548,13 +5827,30 @@ function watchForUpdates() {
   });
 }
 
+/* Zoom.
+
+   The viewport meta stops pinch and double tap zoom on a phone. Desktop browsers
+   ignore that meta entirely, so the accidental case there, a two finger pinch on
+   a trackpad, which the browser sends as a wheel event with ctrl held, is caught
+   here instead.
+
+   What is deliberately NOT blocked is keyboard zoom. Ctrl plus and ctrl minus are
+   how someone with poor eyesight reads a screen, and taking that away to stop an
+   accident is the wrong trade. Accidental zoom goes, intentional zoom stays. */
+function lockZoom() {
+  const stop = e => { if (e.ctrlKey) e.preventDefault(); };
+  window.addEventListener("wheel", stop, { passive:false });
+  document.addEventListener("gesturestart", e => e.preventDefault());
+  document.addEventListener("gesturechange", e => e.preventDefault());
+}
+
 const openRail = () => { $("#rail").classList.add("open"); $("#backdrop").classList.add("on"); };
 const closeRail = () => { $("#rail").classList.remove("open"); $("#backdrop").classList.remove("on"); };
 
 function boot() {
   load();
   if (S.theme) document.documentElement.setAttribute("data-theme", S.theme);
-  probeStorage(); showStorageBanner(); watchForUpdates();
+  probeStorage(); showStorageBanner(); watchForUpdates(); lockZoom();
   if (!S.tourDone && !S.chats.length) setTimeout(() => openTour(0), 400);
   syncMode(); renderRail(); renderStream(); updateSend();
 
@@ -5576,7 +5872,7 @@ function boot() {
   $("#btnSettings").onclick = openSettings;
   $("#btnTour").onclick = () => openTour(0);
   $("#btnSync").onclick = openSettings;
-  if (S.gsync && S.gsync.clientId && S.gsync.token) setSyncBadge("ok");
+  if (S.gsync && clientId() && S.gsync.token) setSyncBadge("ok");
   $("#btnSignals").onclick = openSignals;
   $("#ctxPill").onclick = () => openWorkspace(activeWs().id);
   $("#typeRow").onclick = () => openModes(id => {

@@ -44,22 +44,12 @@ Then open `http://localhost:8777/sightline.html`. This is also what `.claude/lau
 
 ## Syncing across devices, with Google Drive
 
-Optional, and off until you set it up. Your data goes into **your own Google Drive**, in a private
-folder only this app can see. Your other files are invisible to it. There is no server anywhere in
-this, and nothing passes through anyone else.
+Optional. Press **Continue with Google** during onboarding, or in Settings, and your work
+follows you between devices. There is nothing to configure.
 
-One time setup, in your own Google account:
-
-1. At **console.cloud.google.com**, pick the project your Gemini key already lives in.
-2. **APIs and Services**, then **Library**. Search **Google Drive API**, press Enable.
-3. **OAuth consent screen**. Choose External, name it, add your own email as a test user. Leave it
-   in Testing, which allows up to a hundred people and needs no review from Google.
-4. **Credentials**, **Create credentials**, **OAuth client ID**, type **Web application**.
-5. Under **Authorised JavaScript origins** add your site origin exactly, for example
-   `https://attano26.github.io`.
-6. Copy the Client ID and paste it into Settings, then press **Sign in and sync**.
-
-A client ID is not a secret. It is designed to be visible in the page.
+Your data goes into **your own Google Drive** as a single file, `sightline-data.json`, that this
+app creates. It can read and write that one file and nothing else of yours. There is no server
+anywhere in this, and nothing passes through anyone else.
 
 **What syncs:** workspaces, facts, behaviour, simulations and signals.
 **What does not:** your Gemini key, deliberately. An API key does not belong in a file that travels
@@ -68,6 +58,23 @@ between devices, even a private one.
 **If both devices changed** since the last sync, it stops and asks which to keep, showing what each
 side holds and when it changed. It will not guess, because silently discarding a day of work to
 avoid a dialogue is not a trade worth making.
+
+### If you are hosting your own copy
+
+The app ships with one OAuth client, tied to the origin it is published on. A client ID is not a
+secret, which is exactly why this is the publisher's job and not the user's. Serving the file from
+your own origin means bringing your own, once:
+
+1. At **console.cloud.google.com**, pick or create a project.
+2. **APIs and Services**, then **Library**. Search **Google Drive API**, press Enable.
+3. **OAuth consent screen**. External, name it, and add the `drive.file` scope. That scope is not
+   sensitive, so the consent screen can be published without a verification review and anyone can
+   then sign in.
+4. **Credentials**, **Create credentials**, **OAuth client ID**, type **Web application**.
+5. Under **Authorised JavaScript origins** add your origin exactly, for example
+   `https://yourname.github.io`, with no trailing slash.
+6. Put the Client ID in `APP_CLIENT_ID` near the top of the sync section of `sightline.html`, or
+   paste it into Settings on each device.
 
 ## Storage warning
 
