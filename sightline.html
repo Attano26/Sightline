@@ -105,13 +105,12 @@
    then the viewport has settled, which is exactly why this only ever showed up
    once per install.
 
-   `dvh` is the unit that tracks the retracting chrome. The `100%` line stays
-   ahead of it as the fallback for anything that does not know `dvh`, and
-   `--vvh`, set from visualViewport at runtime, is the last resort for the
-   browsers whose `dvh` is itself wrong on that first paint. */
+   `dvh` is the unit that tracks the retracting chrome, and `100%` stays ahead
+   of it as the fallback for anything that does not know `dvh`. The shell
+   itself is sized from `--apph`, written from visualViewport, because on a
+   first launch `dvh` is resolved once against a viewport still settling. */
 html,body{height:100%}
 html,body{height:100dvh}
-html.vvh,html.vvh body{height:var(--vvh)}
 body{
   margin:0;background:var(--paper);color:var(--ink);
   font-family:var(--fs);font-size:15px;line-height:1.55;
@@ -261,7 +260,6 @@ button{cursor:pointer;background:none;border:none;padding:0}
    greeting centred on the page reads as a marketing hero rather than as
    somebody's own screen. */
 .welcome{padding:20px 0 4px;text-align:left}
-.wtag{font-size:14px;font-weight:600;color:var(--accent-ink);margin-bottom:18px;letter-spacing:0}
 .whello,.wtitle{
   font-weight:700;font-size:clamp(29px,7vw,46px);line-height:1.08;letter-spacing:-.036em;
   margin:0;max-width:17ch;text-wrap:balance;
@@ -382,16 +380,6 @@ button{cursor:pointer;background:none;border:none;padding:0}
 }
 .newmech .lb{font-size:14.5px;font-weight:600;color:var(--accent-ink);flex:0 0 auto}
 
-/* ---------- mode block ---------- */
-.mblock{display:flex;flex-direction:column;gap:2px;border-radius:var(--r-box);overflow:hidden}
-.mrow{display:flex;flex-direction:column;gap:4px;padding:14px 17px;background:var(--surface-2)}
-.mrow .k{font-size:12.5px;font-weight:600;color:var(--ink-3)}
-.mrow .v{font-size:15px;line-height:1.48;letter-spacing:-.013em}
-.mrow .v .tag{font-size:12px;font-weight:700;padding:2px 9px;border-radius:var(--r-pill);margin-right:8px}
-.tag.buys{background:var(--accent-soft);color:var(--accent-ink)}
-.tag.negotiates{background:var(--sev-med-soft);color:var(--sev-med)}
-.tag.ignores{background:var(--sev-high-soft);color:var(--sev-high)}
-
 .num{border-bottom:1.5px dotted var(--sev-med);cursor:help}
 .num.given{border-bottom-color:var(--ok)}
 .unitwarn{
@@ -457,19 +445,6 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 /* ---------- composer ---------- */
 .composer{flex:0 0 auto;padding:10px 24px max(calc(18px + env(safe-area-inset-bottom)),calc(18px + var(--safeb,0px)));background:var(--paper)}
 .compin{max-width:748px;margin:0 auto}
-.moderow{display:flex;gap:8px;align-items:center;margin-bottom:10px}
-.modebtn{
-  display:flex;align-items:center;gap:7px;padding:8px 15px;border-radius:var(--r-pill);
-  border:1px solid var(--line);font-size:13.5px;font-weight:600;color:var(--ink);
-  background:var(--surface);white-space:nowrap;transition:box-shadow .18s,transform .18s;
-}
-.modebtn:hover{box-shadow:var(--sh-1);transform:translateY(-1px)}
-.ctxpill{
-  font-size:13px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  flex:1;text-align:right;cursor:pointer;transition:color .15s;
-}
-.ctxpill:hover{color:var(--ink-2)}
-.ctxpill.warn{color:var(--sev-med);font-weight:500}
 
 .inbox{
   display:flex;align-items:flex-end;gap:10px;border:1px solid var(--line);
@@ -582,7 +557,6 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
   display:flex;flex-direction:column;gap:14px;animation:fi .3s cubic-bezier(.2,.7,.3,1) both;
 }
 .clhead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
-.clttl{flex:1;font-size:14.5px;font-weight:600;letter-spacing:-.016em}
 .clskip{font-size:13px;font-weight:500;color:var(--ink-3);white-space:nowrap}
 .clskip:hover{color:var(--ink-2);text-decoration:underline;text-underline-offset:3px}
 .clq{display:flex;flex-direction:column;gap:8px}
@@ -597,6 +571,16 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .clopt:hover{border-color:var(--ink-3)}
 .clopt:active{transform:scale(.97)}
 .clopt.on{background:var(--ink);color:var(--surface);border-color:var(--ink);font-weight:600}
+.synclive{
+  display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:10px;
+  font-size:13px;line-height:1.5;color:var(--ink-2);
+}
+.synclive b{color:var(--ink);font-weight:600}
+.synclive .cidot{margin-top:0}
+.cidot.ok{background:var(--ok)}
+.cidot.go{background:var(--accent)}
+.cidot.idle{background:var(--ink-3)}
+.syncwhen{width:100%;color:var(--ink-3);font-size:12.5px}
 .clnote{margin-top:10px;font-size:13px;line-height:1.5;color:var(--ink-2);letter-spacing:-.008em}
 .clnote:not(:empty){padding:11px 13px;background:var(--surface-2);border-radius:var(--r-box)}
 .clnote b{color:var(--ink);font-weight:600}
@@ -988,17 +972,6 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 
 
 /* ---------- onboarding ---------- */
-.tour{display:flex;flex-direction:column;gap:0}
-.tour .wtag{margin-bottom:14px}
-.tourttl{
-  font-size:clamp(23px,5.2vw,30px);font-weight:700;line-height:1.18;letter-spacing:-.032em;
-  margin:20px 0 12px;text-wrap:balance;
-}
-.tourbody{font-size:15.5px;line-height:1.6;color:var(--ink-2);margin:0 0 22px;letter-spacing:-.011em}
-.tourart{
-  border-radius:var(--r-box);background:var(--surface-2);padding:22px;
-  display:grid;place-items:center;min-height:150px;
-}
 .tspine{display:flex;flex-direction:column;gap:16px;width:100%;max-width:300px}
 .tnode{display:flex;align-items:center;gap:13px;position:relative}
 .tnode::before{content:"";position:absolute;left:5px;top:16px;bottom:-16px;width:2px;background:var(--line)}
@@ -1008,18 +981,6 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .tnode.n2 .tdot{border-color:var(--sev-high);background:var(--sev-high)}
 .tlabel{font-size:14.5px;font-weight:600;letter-spacing:-.016em}
 .tnode.n2 .tlabel{color:var(--sev-high)}
-.tchips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
-.tchip{
-  font-size:13.5px;font-weight:500;padding:7px 14px;border-radius:var(--r-pill);
-  border:1px solid var(--line);background:var(--surface);
-}
-.tchip.q{border:none;background:transparent;color:var(--ink-2);font-weight:600;width:100%;text-align:center;padding:0 0 4px}
-.tchip.on{background:var(--ink);color:var(--surface);border-color:var(--ink);font-weight:600}
-.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;width:100%}
-.tcell{display:flex;flex-direction:column;gap:3px;padding:12px 14px;background:var(--surface);border-radius:var(--r-box)}
-.tk{font-size:12px;font-weight:600;color:var(--ink-3)}
-.tv{font-size:14px;font-weight:600;letter-spacing:-.014em}
-.tgrid.two .tv{font-weight:400;color:var(--ink-2);font-size:13.5px;letter-spacing:-.01em}
 .tpipe{display:flex;flex-direction:column;gap:11px;width:100%;max-width:320px}
 .tstep{display:flex;align-items:flex-start;gap:11px;text-align:left}
 .tnum{
@@ -1037,11 +998,6 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .btn.google svg{flex:0 0 auto}
 .btn.google:disabled{opacity:.55;cursor:default}
 
-.tdots{display:flex;gap:7px;justify-content:center;margin-bottom:20px}
-.tdotnav{width:7px;height:7px;border-radius:50%;background:var(--line);transition:background .2s,width .2s}
-.tdotnav:hover{background:var(--ink-3)}
-.tdotnav.on{background:var(--ink);width:22px;border-radius:var(--r-pill)}
-@media(max-width:520px){.tgrid{grid-template-columns:1fr}}
 
 
 .demobar{
@@ -2271,18 +2227,29 @@ function probeStorage() {
   return storageState;
 }
 
-let autoSyncTimer = null;
+/* Automatic sync is debounced, not scheduled. There is no interval and no next
+   sync time, because a fixed clock would either push while somebody is still
+   typing or sit idle holding a finished change. `AUTO_SYNC_MS` after the last
+   edit is the whole rule, and Settings states it in those words rather than
+   showing a countdown to something that does not exist. */
+const AUTO_SYNC_MS = 4000;
+let autoSyncTimer = null, autoSyncAt = 0, autoSyncBusy = false;
+
 function save() {
   S.updatedAt = Date.now();   // what makes "which copy is newer" answerable
   clearTimeout(saveTimer);
   clearTimeout(autoSyncTimer);
+  autoSyncAt = 0;
   const g = S.gsync;
   if (g && clientId() && g.auto && g.token) {
     // Quiet background push, well after the user has stopped typing.
+    autoSyncAt = Date.now() + AUTO_SYNC_MS;
     autoSyncTimer = setTimeout(() => {
+      autoSyncAt = 0; autoSyncBusy = true;
       gSync().then(r => { if (r && r.did === "conflict") setSyncBadge("conflict"); else setSyncBadge("ok"); })
-             .catch(() => setSyncBadge("error"));
-    }, 4000);
+             .catch(() => setSyncBadge("error"))
+             .then(() => { autoSyncBusy = false; });
+    }, AUTO_SYNC_MS);
   }
   saveTimer = setTimeout(() => {
     if (storageState === "blocked") { showStorageBanner(); return; }
@@ -2295,6 +2262,21 @@ function save() {
       showStorageBanner();
     }
   }, 180);
+}
+
+/* "3 minutes ago" reads faster than a full date stamp, and the exact time is
+   still there on hover where somebody actually needs it. */
+function sinceText(ts) {
+  if (!ts) return "never";
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (s < 10) return "just now";
+  if (s < 60) return s + " seconds ago";
+  const m = Math.round(s / 60);
+  if (m < 60) return m === 1 ? "a minute ago" : m + " minutes ago";
+  const h = Math.round(m / 60);
+  if (h < 24) return h === 1 ? "an hour ago" : h + " hours ago";
+  const d = Math.round(h / 24);
+  return d === 1 ? "yesterday" : d + " days ago";
 }
 
 function stateSizeKb() { try { return Math.round(JSON.stringify(S).length / 1024); } catch (e) { return 0; } }
@@ -4981,7 +4963,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-g";
+const BUILD = "2026-08-26-h";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -5363,7 +5345,7 @@ function pageSync(s) {
 
   const n = el("div", "notice");
   n.innerHTML = g.token
-    ? "<span><b>Sync is on.</b> Last synced " + esc(g.lastSync ? new Date(g.lastSync).toLocaleString() : "never") + "."
+    ? "<span><b>Sync is on.</b> Last synced " + esc(sinceText(g.lastSync)) + "."
       + " Your work sits in your own Drive as a single file named <b>" + esc(GDRIVE_FILE) + "</b>.</span>"
     : "<span>Your work follows you between devices, stored in <b>your own Google Drive</b> as a single file this app creates. It can read and write that one file and nothing else of yours. There is no server in this, and nothing passes through anyone else.</span>";
   s.appendChild(n);
@@ -5529,7 +5511,46 @@ function syncTail(s, g, row, out) {
     arow.appendChild(b);
   });
   au.appendChild(arow);
-  au.appendChild(el("div", "hint", "Your Gemini key is deliberately left out of the sync. An API key does not belong in a file that travels between devices, even a private one."));
+
+  /* What the setting actually does, and what it is doing right now.
+
+     "Automatically" told you nothing about when. There is no schedule to show,
+     so this states the rule and then reports live state against it: a change
+     waiting to go up, a push in flight, or how long ago the last one landed. It
+     ticks every second and cancels itself once the page is gone, so closing
+     Settings does not leave an interval running. */
+  const live = el("div", "synclive");
+  au.appendChild(live);
+  const paintLive = () => {
+    const gs = gsync();
+    const bits = [];
+    if (!gs.auto) bits.push('<span class="cidot idle"></span>Automatic sync is off. Nothing goes up until you press <b>Sync now</b>.');
+    else if (autoSyncBusy) bits.push('<span class="cidot go"></span>Sending to Drive now.');
+    else if (autoSyncAt) {
+      const left = Math.max(0, Math.ceil((autoSyncAt - Date.now()) / 1000));
+      bits.push('<span class="cidot go"></span>A change is waiting. Going up in <b>' + left + (left === 1 ? " second" : " seconds") + "</b>.");
+    } else {
+      bits.push('<span class="cidot ok"></span>Everything here is on Drive.');
+    }
+    bits.push('<span class="syncwhen">Last sync ' + esc(sinceText(gs.lastSync)) + ".</span>");
+    live.innerHTML = bits.join("");
+  };
+  paintLive();
+  // The guard belongs on the interval, not on the paint. Putting it on the paint
+  // meant the first call, which happens before this row is attached to the sheet,
+  // rejected itself and left the row blank until a second had passed.
+  const tick = setInterval(() => {
+    // Containment alone is not enough: closeSheet only hides the scrim, it does
+    // not empty the sheet, so the row stays in the document and the interval ran
+    // forever after Settings was closed. Being on screen is the real condition.
+    if (!document.body.contains(live) || !$("#scrim").classList.contains("on")) {
+      clearInterval(tick); return;
+    }
+    paintLive();
+  }, 1000);
+  const syncHint = el("div", "hint");
+  syncHint.innerHTML = "<b>Automatically</b> means four seconds after your last change, not on a schedule. A fixed clock would either interrupt you mid edit or sit on a finished change. Your Gemini key is deliberately left out of the sync, so nobody can spend your quota.";
+  au.appendChild(syncHint);
   s.appendChild(au);
 }
 
@@ -5771,7 +5792,7 @@ function setSyncBadge(state) {
   b.hidden = false;
   d.className = "syncdot " + state;
   l.textContent = state === "ok" ? "Synced" : state === "conflict" ? "Two copies differ" : state === "syncing" ? "Syncing" : "Sync problem";
-  b.title = state === "ok" && g.lastSync ? "Last synced " + new Date(g.lastSync).toLocaleString() : "Open settings to sort this out";
+  b.title = state === "ok" && g.lastSync ? "Last synced " + sinceText(g.lastSync) + ", at " + new Date(g.lastSync).toLocaleString() : "Open settings to sort this out";
 }
 function updateCtxPill() {
   const ws = activeWs(); const p = $("#ctxPill");
