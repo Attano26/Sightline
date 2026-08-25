@@ -114,7 +114,7 @@ button{cursor:pointer;background:none;border:none;padding:0}
 
 .rail{
   width:290px;flex:0 0 290px;background:var(--surface);
-  border-right:1px solid var(--line-2);display:flex;flex-direction:column;z-index:40;
+  border-right:1px solid var(--line-2);display:flex;flex-direction:column;z-index:60;
 }
 .rail-head{padding:22px 20px 14px;display:flex;align-items:center;gap:10px}
 .wordmark{font-weight:700;font-size:19px;letter-spacing:-.03em}
@@ -224,6 +224,7 @@ button{cursor:pointer;background:none;border:none;padding:0}
 /* ---------- welcome ---------- */
 .welcome{padding:26px 0 4px;text-align:center}
 .wtag{font-size:14px;font-weight:600;color:var(--accent-ink);margin-bottom:18px;letter-spacing:0}
+.whello{font-size:15px;color:var(--ink-2);margin-bottom:10px}
 .wtitle{
   font-weight:700;font-size:clamp(30px,7.4vw,50px);line-height:1.05;letter-spacing:-.035em;
   margin:0 auto 18px;max-width:15ch;text-wrap:balance;
@@ -934,6 +935,11 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
   backdrop-filter:blur(5px) saturate(.85);-webkit-backdrop-filter:blur(5px) saturate(.85);
   animation:fi .26s cubic-bezier(.2,.7,.3,1) both;
 }
+/* Stacking order, in one place so it is not rediscovered every time something
+   is layered: top bar 10, focus scrim 45, composer 50, drawer backdrop 55,
+   rail 60, sheet scrim 80, toast 120. The composer sits above the focus scrim
+   so a question stays usable, and below the drawer so the menu is never
+   covered by it. */
 .composer{position:relative;z-index:50}
 @media (prefers-reduced-motion:reduce){.focusscrim{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(0,0,0,.5)}}
 
@@ -984,13 +990,42 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
   margin-bottom:7px;letter-spacing:0;
 }
 
+
+/* ---------- settings ---------- */
+.setlist{display:flex;flex-direction:column;gap:2px;border-radius:var(--r-box);overflow:hidden}
+.setrow{
+  display:flex;align-items:center;gap:12px;padding:16px 18px;background:var(--surface-2);
+  text-align:left;transition:background .15s;
+}
+.setrow:hover{background:var(--line-2)}
+.setleft{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.setname{font-size:16px;font-weight:600;letter-spacing:-.02em}
+.setnote{font-size:13px;color:var(--ink-2);line-height:1.4}
+.setstat{
+  flex:0 0 auto;font-size:12.5px;font-weight:600;color:var(--ink-3);
+  background:var(--surface);padding:3px 10px;border-radius:var(--r-pill);white-space:nowrap;
+}
+.setarrow{flex:0 0 auto;font-size:20px;color:var(--ink-3);line-height:1}
+.setback{
+  align-self:flex-start;font-size:13.5px;font-weight:600;color:var(--ink-2);
+  padding:6px 12px 6px 8px;border-radius:var(--r-pill);margin-bottom:2px;transition:background .15s;
+}
+.setback:hover{background:var(--surface-2);color:var(--ink)}
+.confbox ol{margin:8px 0 0;padding-left:18px}
+.confbox ol li{margin-bottom:5px}
+@media(max-width:520px){
+  .setrow{flex-wrap:wrap}
+  .setstat{order:3;margin-left:0}
+  .setarrow{margin-left:auto}
+}
+
 /* ---------- responsive ---------- */
 .backdrop{display:none}
 @media(max-width:899px){
   .rail{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);transition:transform .3s cubic-bezier(.2,.7,.3,1);box-shadow:var(--sh-2)}
   .rail.open{transform:none}
   .hamb{display:grid;place-items:center}
-  .backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:35;opacity:0;pointer-events:none;transition:opacity .3s}
+  .backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:55;opacity:0;pointer-events:none;transition:opacity .3s}
   .backdrop.on{opacity:1;pointer-events:auto}
   .streamin{padding:22px 18px 30px;gap:22px}
   .topbar{padding:12px 16px;min-height:58px}
@@ -3772,6 +3807,10 @@ function renderWelcome(box) {
   w.appendChild(el("div", "wtag", "Pricing, launches, tenders, competitors, costs and codes"));
   const t = el("h1", "wtitle"); t.textContent = "See how the market will react, before you decide.";
   w.appendChild(t);
+  if ((S.userName || "").trim()) {
+    const hi = el("div", "whello", "Hello, " + S.userName.trim() + ".");
+    w.insertBefore(hi, w.firstChild.nextSibling);
+  }
   const s = el("p", "wsub");
   s.innerHTML = "Tell it what you are thinking of doing. It works out who reacts, what they do about it, and what that turns into a few months later. Built for <b>aluminium systems, glass and the building envelope</b>.";
   w.appendChild(s);
@@ -4610,264 +4649,405 @@ async function gSync(opts) {
            remoteCounts:{ w:(remote.workspaces||[]).length, c:(remote.chats||[]).length } };
 }
 
+/* ============================================================
+   SETTINGS
+
+   One screen per subject, reached from a short list. The previous
+   version put a key field, a five step Google setup, export tools
+   and two disclaimers on a single scroll, and the setup notes alone
+   were longer than everything else combined. Nobody reads that, so
+   nobody found the parts that mattered.
+
+   Each page owns one decision and says only what that decision
+   needs.
+   ============================================================ */
+const SETTINGS_PAGES = [
+  { id:"you",   name:"You",              note:"Your name, theme, and what a new simulation starts as" },
+  { id:"key",   name:"AI key",           note:"Needed to run live. Without it you stay in demo mode" },
+  { id:"sync",  name:"Sync",             note:"Keep your work on every device, in your own Google Drive" },
+  { id:"data",  name:"Your data",        note:"Export, import, and where everything is stored" },
+  { id:"about", name:"About Sightline",  note:"What it does, what it will not do, and the version" }
+];
+
+function settingsRowStatus(id) {
+  const g = S.gsync || {};
+  if (id === "key") return S.key ? "Key set" : "Demo mode";
+  if (id === "sync") return g.token ? "On" : (g.clientId ? "Set up, not signed in" : "Off");
+  if (id === "you") return (S.userName || "").trim() || "Not set";
+  if (id === "data") return stateSizeKb() + " KB stored";
+  return "";
+}
+
 function openSettings() {
   openSheet("Settings", s => {
-    const f = el("div", "fld");
-    f.appendChild(el("label", "", "Google Gemini API key"));
-    const i = el("input"); i.type = "password"; i.value = S.key || ""; i.placeholder = "Paste your key";
-    i.oninput = () => { S.key = i.value.trim(); save(); };
-    f.appendChild(i);
-    f.appendChild(el("div", "hint", "Stored in this browser only. Sent directly to Google and nowhere else, because this app has no server. Leave it empty to stay in demo mode."));
-    s.appendChild(f);
-
-    const test = el("div", "btnrow");
-    const tb = el("button", "btn", "Test key");
-    const diag = el("div"); diag.style.marginTop = "4px";
-    const report = (cls, title, body, raw) => {
-      diag.innerHTML = "";
-      const b = el("div", cls === "ok" ? "notice" : "err");
-      if (cls === "ok") b.style.borderColor = "var(--accent)";
-      b.innerHTML = "<span><b>" + esc(title) + "</b> " + body + "</span>";
-      diag.appendChild(b);
-      if (raw) {
-        const d = el("details", "gaps"); d.style.borderTop = "none";
-        const sm = el("summary", "", "What Google actually said");
-        d.appendChild(sm);
-        const p = el("div", "gap"); p.style.margin = "0 0 8px";
-        p.style.fontFamily = "var(--fs-mono)"; p.style.fontSize = "11px"; p.style.wordBreak = "break-word";
-        p.textContent = raw;
-        d.appendChild(p); diag.appendChild(d);
-      }
-    };
-    tb.onclick = async () => {
-      if (!S.key) { report("err", "No key entered.", "Paste one above first."); return; }
-      tb.textContent = "Testing…"; diag.innerHTML = "";
-      const probe = m => callGeminiOnce(S.key, "Reply with JSON.", "Say ok.",
-        { type:"object", properties:{ ok:{ type:"string" } }, required:["ok"] }, m);
-      try {
-        await probe("key"); S.authMode = "key"; save();
-        tb.textContent = "Test key";
-        report("ok", "Key works.", "Authenticated as an API key. You are running live.");
-        return;
-      } catch (e1) {
-        // Rate limiting proves the credential is good.
-        if (e1.status === 429) {
-          S.authMode = "key"; save(); tb.textContent = "Test key";
-          report("ok", "Key is valid, but rate limited.", "Google is throttling this project, usually a free tier quota. Wait a minute and try a simulation.", e1.message);
-          return;
-        }
-        if (e1.reason === "API_KEY_INVALID") {
-          // Might be an OAuth access token rather than an API key — same string, different header.
-          try {
-            await probe("bearer"); S.authMode = "bearer"; save();
-            tb.textContent = "Test key";
-            report("ok", "That is an OAuth token, not an API key.", "Sightline has switched to bearer authentication for it, and it works. Note that OAuth tokens expire, often within the hour. An AI Studio API key does not.");
-            return;
-          } catch (e2) {
-            tb.textContent = "Test key";
-            report("err", "Google rejected this credential both ways.",
-              "It is not a valid API key and not a valid OAuth token. There are three usual causes. It was copied incompletely, it was <b>revoked or regenerated</b>, or it is restricted in Google Cloud Console to an Android app or to specific websites. A key restricted to an Android package will always refuse a browser. Create a fresh unrestricted key at <b>aistudio.google.com</b> and paste that one.",
-              e2.message);
-            return;
-          }
-        }
-        tb.textContent = "Test key";
-        if (e1.status === 403) {
-          report("err", "The key is real but not allowed here.",
-            "Usually one of two things. Either the <b>Generative Language API is not enabled</b> on this key's Google Cloud project, or the key carries an application restriction, such as an Android app, a website, or an IP address, that a local page cannot satisfy.", e1.message);
-        } else if (e1.status === 404) {
-          report("err", "The key is fine, but the model is not reachable.",
-            "This project cannot see <b>" + MODEL + "</b>. That usually means billing is not active on it.", e1.message);
-        } else if (/Failed to fetch|NetworkError/i.test(e1.message || "")) {
-          report("err", "Could not reach Google at all.",
-            "This is a network problem, not a key problem. You are offline, or a firewall or extension is blocking the request. The key was never tested.", e1.message);
-        } else {
-          report("err", "That did not work.", esc(e1.message || "Unknown error"), e1.message);
-        }
-      }
-    };
-    test.appendChild(tb);
-    s.appendChild(test);
-    s.appendChild(diag);
-
-    const n = el("div", "notice");
-    n.innerHTML = "<span><b>Cost.</b> This app never uses web search, which is where the expense normally sits. A simulation is a few thousand tokens, a fraction of a rupee, and free on Google's free tier.</span>";
-    s.appendChild(n);
-
-    /* ---- Google Drive sync ---- */
-    const g = gsync();
-    const sy = el("div", "fld");
-    sy.appendChild(el("label", "", "Sync with Google Drive"));
-    const syOut = el("div");
-
-    const canSync = location.protocol === "https:" || location.hostname === "localhost";
-    if (!canSync) {
-      const n = el("div", "notice");
-      n.innerHTML = "<span><b>Not available here.</b> Google refuses sign in from a file opened directly or from a preview. Open the hosted version and this appears.</span>";
-      sy.appendChild(n);
-      s.appendChild(sy);
-    } else {
-      const setup = el("details", "gaps"); setup.style.borderTop = "none";
-      const sm = el("summary");
-      sm.appendChild(el("span", "tw", QL === QL ? "›" : ""));
-      sm.appendChild(el("span", "", g.clientId ? "Change the Google setup" : "First, a five minute setup on Google"));
-      setup.appendChild(sm);
-      const steps = el("div", "gaplist");
-      const st = el("div", "confbox");
-      st.innerHTML =
-        "<b>You do this once, in your own Google account.</b><ul>" +
-        "<li>Go to <b>console.cloud.google.com</b> and pick the project your Gemini key already lives in.</li>" +
-        "<li>Open <b>APIs and Services</b>, then <b>Library</b>. Search for <b>Google Drive API</b> and press Enable.</li>" +
-        "<li>Open <b>OAuth consent screen</b>. Choose External, give it a name, and add your own email as a test user. Leave it in Testing. That allows up to a hundred people and needs no review.</li>" +
-        "<li>Open <b>Credentials</b>, then <b>Create credentials</b>, then <b>OAuth client ID</b>. Choose <b>Web application</b>.</li>" +
-        "<li>Under <b>Authorised JavaScript origins</b> add exactly:<br><b>" + esc(location.origin) + "</b></li>" +
-        "<li>Create it, copy the <b>Client ID</b>, and paste it below. It ends in <b>.apps.googleusercontent.com</b>.</li>" +
-        "</ul>A client ID is not a secret. It is meant to be visible in the page." +
-        "<br><br><b>If Google says 401 invalid_client</b>, it does not recognise the ID for this kind of sign in. Three causes, in order of likelihood:<ul>" +
-        "<li><b>The application type is wrong.</b> It must be <b>Web application</b>. Desktop app, Android, iOS and TV all fail this way, and the type cannot be changed after creation. Delete it and make a new one.</li>" +
-        "<li><b>You pasted the client secret.</b> That screen shows two values. You want the one ending in <b>.apps.googleusercontent.com</b>.</li>" +
-        "<li><b>Wrong project.</b> If you have several, the client must be in the project you enabled the Drive API on.</li>" +
-        "</ul><b>If Google says origin mismatch</b>, the address in <b>Authorised JavaScript origins</b> does not match this page exactly. It must be <b>" + esc(location.origin) + "</b>, with no trailing slash and no path.";
-      steps.appendChild(st);
-      setup.appendChild(steps);
-      sy.appendChild(setup);
-
-      const ci = el("input");
-      ci.placeholder = "Paste your Client ID, ending in .apps.googleusercontent.com";
-      ci.value = g.clientId || "";
-      const ciWarn = el("div", "hint");
-      const checkCi = () => {
-        const v = (g.clientId || "").trim();
-        if (!v) { ciWarn.textContent = ""; ciWarn.style.color = ""; return; }
-        // Soft notes, never a block. The only real test is asking Google. But a
-        // truncated paste is invisible otherwise, and the Cloud console shows the
-        // ID abbreviated with an ellipsis right next to a copy button, so copying
-        // the visible text instead of pressing that button is easy to do and
-        // produces exactly the same error as a wrong client.
-        const SUF = ".apps.googleusercontent.com";
-        const bad = m => { ciWarn.innerHTML = m; ciWarn.style.color = "var(--sev-med)"; };
-        if (/…|\.\.\./.test(v)) return bad("That contains an ellipsis, so it is the shortened version the console displays, not the whole ID. Use the copy button beside it in Google Cloud Console.");
-        if (/^GOCSPX/i.test(v)) return bad("That is a client <b>secret</b>. You want the value ending in <b>" + SUF + "</b>.");
-        if (v.indexOf(SUF) === -1) return bad("That does not end in <b>" + SUF + "</b>, which every client ID does. Google will answer 401 invalid_client.");
-        const head = v.slice(0, v.length - SUF.length);
-        if (!/^\d{8,}-[A-Za-z0-9_]{10,}$/.test(head)) {
-          return bad("The part before " + SUF + " looks incomplete. A full ID is a project number, a dash, then a long random section. Yours is " + head.length + " characters. Copy it again with the copy button.");
-        }
-        ciWarn.innerHTML = "That looks complete. " + v.length + " characters, project number <b>" + esc(head.split("-")[0]) + "</b>.";
-        ciWarn.style.color = "";
-      };
-      ci.oninput = () => { g.clientId = ci.value.trim(); save(); checkCi(); };
-      sy.appendChild(ci);
-      checkCi();
-      sy.appendChild(ciWarn);
-
-      const st2 = el("div", "hint");
-      const stamp = g.lastSync ? new Date(g.lastSync).toLocaleString() : "never";
-      st2.innerHTML = g.token
-        ? "Signed in. Last synced: <b>" + esc(stamp) + "</b>."
-        : "Not signed in yet. Your data stays in a private folder only this app can see, and your other Drive files are invisible to it.";
-      sy.appendChild(st2);
-
-      const row = el("div", "btnrow");
-      const bIn = el("button", "btn pri", g.token ? "Sync now" : "Sign in and sync");
-      bIn.onclick = async () => {
-        if (!g.clientId) { syOut.innerHTML = ""; const e2 = el("div", "err"); e2.innerHTML = "<b>Paste your Client ID first.</b> The steps above walk you through getting one."; syOut.appendChild(e2); return; }
-        bIn.textContent = "Working…"; bIn.disabled = true; syOut.innerHTML = "";
-        try {
-          if (!gToken()) await gSignIn(true);
-          const r = await gSync();
-          if (r.did === "conflict") {
-            const c = el("div", "err");
-            c.innerHTML = "<b>Both copies changed since the last sync.</b> This device has " +
-              r.localCounts.w + " workspaces and " + r.localCounts.c + " simulations, changed " +
-              esc(new Date(r.localAt).toLocaleString()) + ". Drive has " + r.remoteCounts.w + " and " +
-              r.remoteCounts.c + ", changed " + esc(new Date(r.remoteAt).toLocaleString()) +
-              ". Export first if you are unsure, then pick one.";
-            const f3 = el("div", "fix");
-            const mine = el("button", "", "Keep this device");
-            mine.onclick = async () => { await gSync({ resolve:"mine" }); openSettings(); toast("Drive now matches this device"); };
-            const theirs = el("button", "", "Take the Drive copy");
-            theirs.onclick = async () => { await gSync({ resolve:"theirs" }); renderRail(); renderStream(); openSettings(); toast("This device now matches Drive"); };
-            f3.appendChild(mine); f3.appendChild(theirs); c.appendChild(f3);
-            syOut.appendChild(c);
-          } else {
-            const ok = el("div", "notice"); ok.style.borderColor = "var(--accent)";
-            const words2 = { pushed:"Sent to Drive", pulled:"Brought down from Drive", same:"Already in sync" };
-            ok.innerHTML = "<span><b>" + (words2[r.did] || "Done") + ".</b> " + esc(r.reason) + ".</span>";
-            syOut.appendChild(ok);
-            if (r.did === "pulled") { renderRail(); renderStream(); }
-            setSyncBadge("ok");
-          }
-        } catch (e) {
-          const e2 = el("div", "err");
-          e2.innerHTML = "<b>That did not work.</b> " + esc(e.message || "Unknown error");
-          syOut.appendChild(e2); setSyncBadge("error");
-        }
-        bIn.disabled = false; bIn.textContent = gToken() ? "Sync now" : "Sign in and sync";
-      };
-      row.appendChild(bIn);
-
-      if (g.token) {
-        const bOut = el("button", "btn", "Sign out");
-        bOut.onclick = () => { g.token = ""; g.tokenExp = 0; save(); openSettings(); toast("Signed out on this device. Nothing was deleted from Drive."); };
-        row.appendChild(bOut);
-      }
-      sy.appendChild(row);
-
-      const au = el("div", "clopts");
-      const ab = el("button", "clopt" + (g.auto ? " on" : ""), g.auto ? "Syncing automatically" : "Sync only when I press it");
-      ab.onclick = () => { g.auto = !g.auto; save(); openSettings(); };
-      au.appendChild(ab);
-      sy.appendChild(au);
-      sy.appendChild(syOut);
-      sy.appendChild(el("div", "hint", "Your Gemini key is deliberately left out of the sync. An API key does not belong in a file that travels between devices, even a private one."));
-      s.appendChild(sy);
-    }
-
-    const f2 = el("div", "fld");
-    f2.appendChild(el("label", "", "Your data"));
-    f2.appendChild(el("div", "hint", "Everything lives in this browser unless you turn on Drive sync above. Export regularly either way."));
-    s.appendChild(f2);
-    const row = el("div", "btnrow");
-    const ex = el("button", "btn", "Export all");
-    ex.onclick = async () => {
-      const json = JSON.stringify(S, null, 2);
-      // Hosted viewers block page-initiated downloads; ask the host to save when it can.
-      try {
-        const dl = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
-        if (dl) { await dl.save({ filename:"sightline-backup.json", data:json }); return; }
-      } catch (e) { /* declined or unavailable — fall through */ }
-      try {
-        const blob = new Blob([json], { type:"application/json" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "sightline-backup.json"; a.click();
-        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      } catch (e) {
-        navigator.clipboard.writeText(json).then(() => toast("Download blocked, so it was copied to your clipboard instead"));
-      }
-    };
-    row.appendChild(ex);
-    const im = el("button", "btn", "Import");
-    im.onclick = () => {
-      const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".json";
-      inp.onchange = () => {
-        const fr = new FileReader();
-        fr.onload = () => {
-          try { const o = JSON.parse(fr.result); if (!o.workspaces) throw 0; S = o; save(); closeSheet(); renderRail(); renderStream(); syncMode(); toast("Imported"); }
-          catch (e) { toast("That file could not be read"); }
-        };
-        fr.readAsText(inp.files[0]);
-      };
-      inp.click();
-    };
-    row.appendChild(im);
-    s.appendChild(row);
-
-    const n2 = el("div", "notice");
-    n2.innerHTML = "<span>Sightline produces exploratory reasoning, not forecasts. Nothing in it is market data. Verify before any operating, financial or contractual decision.</span>";
-    s.appendChild(n2);
+    const list = el("div", "setlist");
+    SETTINGS_PAGES.forEach(p => {
+      const b = el("button", "setrow");
+      const left = el("div", "setleft");
+      left.appendChild(el("div", "setname", p.name));
+      left.appendChild(el("div", "setnote", p.note));
+      b.appendChild(left);
+      const st = settingsRowStatus(p.id);
+      if (st) b.appendChild(el("span", "setstat", st));
+      b.appendChild(el("span", "setarrow", "›"));
+      b.onclick = () => openSettingsPage(p.id);
+      list.appendChild(b);
+    });
+    s.appendChild(list);
   });
+}
+
+function openSettingsPage(id) {
+  const page = SETTINGS_PAGES.find(p => p.id === id) || SETTINGS_PAGES[0];
+  openSheet(page.name, s => {
+    const back = el("button", "setback", "‹  All settings");
+    back.onclick = openSettings;
+    s.appendChild(back);
+    ({ you: pageYou, key: pageKey, sync: pageSync, data: pageData, about: pageAbout }[id] || pageYou)(s);
+  });
+}
+
+/* ---------- You ---------- */
+function pageYou(s) {
+  const n = el("div", "fld");
+  n.appendChild(el("label", "", "Your name"));
+  const i = el("input");
+  i.placeholder = "So it can greet you properly";
+  i.value = S.userName || "";
+  i.oninput = () => { S.userName = i.value.slice(0, 40); save(); renderStream(); };
+  n.appendChild(i);
+  n.appendChild(el("div", "hint", "Used on the welcome screen and on anything you export. It is never sent to the model."));
+  s.appendChild(n);
+
+  const t = el("div", "fld");
+  t.appendChild(el("label", "", "Appearance"));
+  const trow = el("div", "clopts");
+  [["", "Match my device"], ["light", "Light"], ["dark", "Dark"]].forEach(([v, lb]) => {
+    const b = el("button", "clopt" + ((S.theme || "") === v ? " on" : ""), lb);
+    b.onclick = () => {
+      S.theme = v;
+      if (v) document.documentElement.setAttribute("data-theme", v);
+      else document.documentElement.removeAttribute("data-theme");
+      save(); openSettingsPage("you");
+    };
+    trow.appendChild(b);
+  });
+  t.appendChild(trow);
+  s.appendChild(t);
+
+  const d = el("div", "fld");
+  d.appendChild(el("label", "", "What a new question starts as"));
+  d.appendChild(el("div", "hint", "It reads your question and picks the right kind of simulation on its own. This is only the starting point shown before you type."));
+  const db = el("button", "btn", modeById(S.mode).name);
+  db.onclick = () => openModes(idm => { S.mode = idm; save(); openSettingsPage("you"); });
+  d.appendChild(db);
+  s.appendChild(d);
+
+  const tour = el("div", "fld");
+  tour.appendChild(el("label", "", "The introduction"));
+  const tb = el("button", "btn", "Show me how this works again");
+  tb.onclick = () => openTour(0);
+  tour.appendChild(tb);
+  s.appendChild(tour);
+}
+
+/* ---------- AI key ---------- */
+function pageKey(s) {
+  const n = el("div", "notice");
+  n.innerHTML = S.key
+    ? "<span>A key is set, so simulations run live. Everything is generated from your context rather than replayed.</span>"
+    : "<span><b>You are in demo mode.</b> Prepared examples, fully explorable, nothing generated. Add a key and every answer becomes real.</span>";
+  s.appendChild(n);
+
+  const f = el("div", "fld");
+  f.appendChild(el("label", "", "Google Gemini API key"));
+  const i = el("input"); i.type = "password"; i.value = S.key || ""; i.placeholder = "Paste your key";
+  i.oninput = () => { S.key = i.value.trim(); save(); };
+  f.appendChild(i);
+  f.appendChild(el("div", "hint", "Stored in this browser only. Sent to Google and nowhere else, because this app has no server. Get one free at aistudio.google.com."));
+  s.appendChild(f);
+
+  const diag = el("div");
+  const row = el("div", "btnrow");
+  const tb = el("button", "btn pri", "Test this key");
+  const report = (ok, title, body, raw) => {
+    diag.innerHTML = "";
+    const b = el("div", ok ? "notice" : "err");
+    if (ok) b.style.borderColor = "var(--accent)";
+    b.innerHTML = "<span><b>" + esc(title) + "</b> " + body + "</span>";
+    diag.appendChild(b);
+    if (raw) {
+      const d = el("details", "gaps"); d.style.borderTop = "none";
+      d.appendChild(el("summary", "", "What Google actually said"));
+      const p = el("div", "gap");
+      p.style.fontFamily = "var(--fs-mono)"; p.style.fontSize = "11.5px"; p.style.wordBreak = "break-word";
+      p.textContent = raw;
+      d.appendChild(p); diag.appendChild(d);
+    }
+  };
+  tb.onclick = async () => {
+    if (!S.key) { report(false, "No key entered.", "Paste one above first."); return; }
+    tb.textContent = "Testing…"; tb.disabled = true; diag.innerHTML = "";
+    const probe = m => callGeminiOnce(S.key, "Reply with JSON.", "Say ok.",
+      { type:"object", properties:{ ok:{ type:"string" } }, required:["ok"] }, m);
+    try {
+      await probe("key"); S.authMode = "key"; save();
+      report(true, "It works.", "Authenticated as an API key. You are running live.");
+    } catch (e1) {
+      if (e1.status === 429) {
+        S.authMode = "key"; save();
+        report(true, "Valid, but rate limited.", "Google is throttling this project, usually a free tier quota. Wait a minute and try a simulation.", e1.message);
+      } else if (e1.reason === "API_KEY_INVALID") {
+        try {
+          await probe("bearer"); S.authMode = "bearer"; save();
+          report(true, "That is an OAuth token, not an API key.", "It works, and Sightline has switched to bearer authentication. Note these expire, often within the hour. An AI Studio key does not.");
+        } catch (e2) {
+          report(false, "Google rejected this both ways.",
+            "It is not a valid API key and not a valid OAuth token. Usually it was copied incompletely, it was revoked, or it is restricted in Google Cloud Console to an Android app or specific sites, which a browser can never satisfy. A fresh unrestricted key from <b>aistudio.google.com</b> is the quickest fix.", e2.message);
+        }
+      } else if (e1.status === 403) {
+        report(false, "Real key, not allowed here.", "Either the Generative Language API is not enabled on its project, or the key carries an application restriction a browser cannot meet.", e1.message);
+      } else if (e1.status === 404) {
+        report(false, "The key is fine, the model is not reachable.", "This project cannot see <b>" + MODEL + "</b>, usually because billing is not active on it.", e1.message);
+      } else if (/Failed to fetch|NetworkError/i.test(e1.message || "")) {
+        report(false, "Could not reach Google.", "A network problem rather than a key problem. The key was never tested.", e1.message);
+      } else {
+        report(false, "That did not work.", esc(e1.message || "Unknown error"), e1.message);
+      }
+    }
+    tb.disabled = false; tb.textContent = "Test this key";
+  };
+  row.appendChild(tb);
+  if (S.key) {
+    const rm = el("button", "btn danger", "Remove key");
+    rm.onclick = () => { S.key = ""; save(); openSettingsPage("key"); toast("Key removed. Back to demo mode."); };
+    row.appendChild(rm);
+  }
+  s.appendChild(row);
+  s.appendChild(diag);
+
+  const c = el("div", "notice");
+  c.innerHTML = "<span><b>What it costs.</b> Nothing like what you might expect. This app never uses web search, which is where the expense normally sits, so a simulation is a few thousand tokens. A fraction of a rupee, and free on Google's free tier.</span>";
+  s.appendChild(c);
+}
+
+/* ---------- Sync ---------- */
+function pageSync(s) {
+  const g = gsync();
+  const canSync = location.protocol === "https:" || location.hostname === "localhost";
+
+  if (!canSync) {
+    const n = el("div", "notice");
+    n.innerHTML = "<span><b>Not available here.</b> Google refuses sign in from a file opened directly, or from a preview. Open the hosted version and this page becomes available.</span>";
+    s.appendChild(n);
+    return;
+  }
+
+  const n = el("div", "notice");
+  n.innerHTML = g.token
+    ? "<span><b>Sync is on.</b> Last synced " + esc(g.lastSync ? new Date(g.lastSync).toLocaleString() : "never") + "."
+      + " Your data sits in your own Drive, in a folder only this app can open.</span>"
+    : "<span>Your work follows you between devices, stored in <b>your own Google Drive</b> in a private folder only this app can see. Your other files stay invisible to it. There is no server in this, and nothing passes through anyone else.</span>";
+  s.appendChild(n);
+
+  const setup = el("details", "gaps"); setup.style.borderTop = "none";
+  const sm = el("summary");
+  sm.appendChild(el("span", "tw", "›"));
+  sm.appendChild(el("span", "", g.clientId ? "Change the Google setup" : "Set this up, about five minutes"));
+  setup.appendChild(sm);
+  const steps = el("div", "gaplist");
+  const st = el("div", "confbox");
+  st.innerHTML =
+    "<b>Once, in your own Google account.</b><ol>" +
+    "<li>At <b>console.cloud.google.com</b>, pick the project your Gemini key lives in.</li>" +
+    "<li><b>APIs and Services</b>, then <b>Library</b>. Search <b>Google Drive API</b>, press Enable.</li>" +
+    "<li><b>OAuth consent screen</b>. External, name it, add your own email as a test user. Leave it in Testing, which allows a hundred people and needs no review.</li>" +
+    "<li><b>Credentials</b>, <b>Create credentials</b>, <b>OAuth client ID</b>, type <b>Web application</b>.</li>" +
+    "<li>Under <b>Authorised JavaScript origins</b> add exactly <b>" + esc(location.origin) + "</b>, no trailing slash.</li>" +
+    "<li>Press the <b>copy button</b> beside the Client ID. Do not select the text, because the console shows it shortened.</li>" +
+    "</ol>" +
+    "<b>If Google says 401 invalid_client</b>, in order of likelihood: the client is not type <b>Web application</b> and cannot be changed after creation, or you pasted the client secret, or it is in a different project, or it was created minutes ago and has not propagated yet.";
+  steps.appendChild(st);
+  setup.appendChild(steps);
+  s.appendChild(setup);
+
+  const f = el("div", "fld");
+  f.appendChild(el("label", "", "Client ID"));
+  const ci = el("input");
+  ci.placeholder = "Ends in .apps.googleusercontent.com";
+  ci.value = g.clientId || "";
+  const ciWarn = el("div", "hint");
+  const checkCi = () => {
+    const v = (g.clientId || "").trim();
+    if (!v) { ciWarn.textContent = ""; ciWarn.style.color = ""; return; }
+    const SUF = ".apps.googleusercontent.com";
+    const bad = m => { ciWarn.innerHTML = m; ciWarn.style.color = "var(--sev-med)"; };
+    if (/…|\.\.\./.test(v)) return bad("That has an ellipsis in it, so it is the shortened version the console displays rather than the whole ID. Use the copy button beside it.");
+    if (/^GOCSPX/i.test(v)) return bad("That is a client <b>secret</b>. You want the value ending in <b>" + SUF + "</b>.");
+    if (v.indexOf(SUF) === -1) return bad("That does not end in <b>" + SUF + "</b>, which every client ID does.");
+    const head = v.slice(0, v.length - SUF.length);
+    if (!/^\d{8,}-[A-Za-z0-9_]{10,}$/.test(head)) return bad("The part before " + SUF + " looks incomplete. Yours is " + head.length + " characters. Copy it again with the copy button.");
+    ciWarn.innerHTML = "Looks complete. " + v.length + " characters, project number <b>" + esc(head.split("-")[0]) + "</b>.";
+    ciWarn.style.color = "";
+  };
+  ci.oninput = () => { g.clientId = ci.value.trim(); save(); checkCi(); };
+  f.appendChild(ci); f.appendChild(ciWarn); checkCi();
+  s.appendChild(f);
+
+  const out = el("div");
+  const row = el("div", "btnrow");
+  const bIn = el("button", "btn pri", g.token ? "Sync now" : "Sign in and sync");
+  bIn.onclick = async () => {
+    if (!g.clientId) { out.innerHTML = ""; const e2 = el("div", "err"); e2.innerHTML = "<b>Paste your Client ID first.</b> The setup notes above walk you through getting one."; out.appendChild(e2); return; }
+    bIn.textContent = "Working…"; bIn.disabled = true; out.innerHTML = "";
+    try {
+      if (!gToken()) await gSignIn(true);
+      const r = await gSync();
+      if (r.did === "conflict") {
+        const c = el("div", "err");
+        c.innerHTML = "<b>Both copies changed since the last sync.</b> This device holds " + r.localCounts.w +
+          " workspaces and " + r.localCounts.c + " simulations, last changed " + esc(new Date(r.localAt).toLocaleString()) +
+          ". Drive holds " + r.remoteCounts.w + " and " + r.remoteCounts.c + ", last changed " +
+          esc(new Date(r.remoteAt).toLocaleString()) + ". Export first if you are unsure.";
+        const fx = el("div", "fix");
+        const mine = el("button", "", "Keep this device");
+        mine.onclick = async () => { await gSync({ resolve:"mine" }); openSettingsPage("sync"); toast("Drive now matches this device"); };
+        const theirs = el("button", "", "Take the Drive copy");
+        theirs.onclick = async () => { await gSync({ resolve:"theirs" }); renderRail(); renderStream(); openSettingsPage("sync"); toast("This device now matches Drive"); };
+        fx.appendChild(mine); fx.appendChild(theirs); c.appendChild(fx);
+        out.appendChild(c);
+      } else {
+        const ok = el("div", "notice"); ok.style.borderColor = "var(--accent)";
+        const w = { pushed:"Sent to Drive", pulled:"Brought down from Drive", same:"Already in sync" };
+        ok.innerHTML = "<span><b>" + (w[r.did] || "Done") + ".</b> " + esc(r.reason) + ".</span>";
+        out.appendChild(ok);
+        if (r.did === "pulled") { renderRail(); renderStream(); }
+        setSyncBadge("ok");
+      }
+    } catch (e) {
+      const e2 = el("div", "err");
+      e2.innerHTML = "<b>That did not work.</b> " + esc(e.message || "Unknown error");
+      out.appendChild(e2); setSyncBadge("error");
+    }
+    bIn.disabled = false; bIn.textContent = gToken() ? "Sync now" : "Sign in and sync";
+  };
+  row.appendChild(bIn);
+  if (g.token) {
+    const bOut = el("button", "btn", "Sign out");
+    bOut.onclick = () => { g.token = ""; g.tokenExp = 0; save(); openSettingsPage("sync"); toast("Signed out here. Nothing was deleted from Drive."); };
+    row.appendChild(bOut);
+  }
+  s.appendChild(row);
+  s.appendChild(out);
+
+  const au = el("div", "fld");
+  au.appendChild(el("label", "", "When to sync"));
+  const arow = el("div", "clopts");
+  [[true, "Automatically"], [false, "Only when I press it"]].forEach(([v, lb]) => {
+    const b = el("button", "clopt" + (!!g.auto === v ? " on" : ""), lb);
+    b.onclick = () => { g.auto = v; save(); openSettingsPage("sync"); };
+    arow.appendChild(b);
+  });
+  au.appendChild(arow);
+  au.appendChild(el("div", "hint", "Your Gemini key is deliberately left out of the sync. An API key does not belong in a file that travels between devices, even a private one."));
+  s.appendChild(au);
+}
+
+/* ---------- Your data ---------- */
+function pageData(s) {
+  const n = el("div", "notice");
+  const g = S.gsync || {};
+  n.innerHTML = "<span><b>" + stateSizeKb() + " KB stored</b>, roughly " + S.chats.length +
+    (S.chats.length === 1 ? " simulation" : " simulations") + " across " + S.workspaces.length +
+    (S.workspaces.length === 1 ? " workspace" : " workspaces") + ". A browser allows about 5,000 KB, so there is a very long way to go." +
+    (g.token ? " It is also copied to your Drive." : " It lives only in this browser, so clearing site data would delete it.") + "</span>";
+  s.appendChild(n);
+
+  const f = el("div", "fld");
+  f.appendChild(el("label", "", "Take a copy"));
+  const row = el("div", "btnrow");
+  const ex = el("button", "btn pri", "Export everything");
+  ex.onclick = async () => {
+    const json = JSON.stringify(S, null, 2);
+    try {
+      const dl = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+      if (dl) { await dl.save({ filename:"sightline-backup.json", data:json }); return; }
+    } catch (e) {}
+    try {
+      const blob = new Blob([json], { type:"application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "sightline-backup.json"; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) {
+      navigator.clipboard.writeText(json).then(() => toast("Download blocked, so it is on your clipboard instead"));
+    }
+  };
+  row.appendChild(ex);
+  const im = el("button", "btn", "Import a backup");
+  im.onclick = () => {
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".json";
+    inp.onchange = () => {
+      const fr = new FileReader();
+      fr.onload = () => {
+        try {
+          const o = JSON.parse(fr.result); if (!o.workspaces) throw 0;
+          if (!confirm("Replace everything on this device with the backup? Export first if you are unsure.")) return;
+          S = o; repairText(S); save(); renderRail(); renderStream(); openSettingsPage("data"); toast("Imported");
+        } catch (e) { toast("That file could not be read"); }
+      };
+      fr.readAsText(inp.files[0]);
+    };
+    inp.click();
+  };
+  row.appendChild(im);
+  f.appendChild(row);
+  f.appendChild(el("div", "hint", "One file with everything: workspaces, facts, simulations and signals. Keep one, whether or not you use Drive."));
+  s.appendChild(f);
+
+  const d = el("div", "fld");
+  d.appendChild(el("label", "", "Start again"));
+  const del = el("button", "btn danger", "Delete everything on this device");
+  del.onclick = () => {
+    if (!confirm("Delete every workspace, simulation and fact on this device? Export first. This cannot be undone.")) return;
+    if (!confirm("Really delete all of it?")) return;
+    localStorage.removeItem(K); S = fresh(); save();
+    renderRail(); renderStream(); closeSheet(); toast("Everything deleted");
+  };
+  d.appendChild(del);
+  d.appendChild(el("div", "hint", (S.gsync && S.gsync.token)
+    ? "This clears the copy on this device. The copy in your Drive is untouched, and signing in again would bring it back."
+    : "There is no other copy unless you exported one."));
+  s.appendChild(d);
+}
+
+/* ---------- About ---------- */
+function pageAbout(s) {
+  const n = el("div", "notice");
+  n.innerHTML = "<span>Sightline works out how people react to a decision in the facade and fenestration industry. You describe a move, it works out who responds, what they do, and what that turns into a few months later.</span>";
+  s.appendChild(n);
+
+  const w = el("div", "fld");
+  w.appendChild(el("label", "", "What it will not do"));
+  const b = el("div", "confbox");
+  b.innerHTML = "<ul>" +
+    "<li><b>It does not search the web.</b> That is deliberate, and it is why it costs almost nothing. It reasons from what you tell it and what the model already knows.</li>" +
+    "<li><b>It will not invent numbers.</b> No market sizes, no shares, no prices you did not give it. Quantities are expressed against your own anchor.</li>" +
+    "<li><b>It will not answer what is true right now.</b> Ask what is currently the case and it stops and says so, rather than guessing fluently.</li>" +
+    "<li><b>It is not a forecast.</b> It is structured reasoning about behaviour, to be argued with. Verify before an operating, financial or contractual decision.</li>" +
+    "</ul>";
+  w.appendChild(b);
+  s.appendChild(w);
+
+  const v = el("div", "fld");
+  v.appendChild(el("label", "", "This copy"));
+  const meta = el("div", "confbox");
+  meta.innerHTML = "<ul><li>Running from <b>" + esc(location.origin) + "</b></li>" +
+    "<li>Model <b>" + esc(MODEL) + "</b></li>" +
+    "<li>Storage is <b>" + esc(storageState) + "</b></li>" +
+    "<li>Simulation modes: <b>" + MODES.length + "</b> across <b>" + Object.keys(SHAPES).length + "</b> output shapes</li></ul>";
+  v.appendChild(meta);
+  s.appendChild(v);
 }
 
 function openSignals() {
