@@ -160,9 +160,26 @@ button{cursor:pointer;background:none;border:none;padding:0}
 .chatrow:hover{background:var(--surface-2);color:var(--ink)}
 .chatrow.on{background:var(--surface-2);color:var(--ink);font-weight:600}
 .chatrow .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chatrow .x{opacity:0;font-size:17px;line-height:1;padding:0 2px;color:var(--ink-3);transition:opacity .15s}
-.chatrow:hover .x{opacity:.6}
-.chatrow .x:hover{opacity:1 !important;color:var(--sev-high)}
+.chatrow .pinmark{flex:0 0 auto;color:var(--accent-ink);display:grid;place-items:center;line-height:0}
+.chatrow.pinned .t{font-weight:600}
+.chatrow .rowmenu{
+  flex:0 0 auto;opacity:0;padding:3px;border-radius:6px;color:var(--ink-3);
+  display:grid;place-items:center;line-height:0;transition:opacity .15s,background .15s;
+}
+.chatrow:hover .rowmenu{opacity:.75}
+.chatrow .rowmenu:hover{opacity:1 !important;background:var(--surface);color:var(--ink)}
+/* No hover on a phone, so the control has to be permanently visible there. */
+@media(hover:none){.chatrow .rowmenu{opacity:.6}}
+
+.menulist{display:flex;flex-direction:column;gap:2px;border-radius:var(--r-box);overflow:hidden}
+.menuitem{
+  text-align:left;padding:14px 16px;background:var(--surface-2);
+  display:flex;flex-direction:column;gap:3px;transition:background .15s;
+}
+.menuitem:hover{background:var(--line-2)}
+.mititle{font-size:15px;font-weight:600;letter-spacing:-.018em}
+.minote{font-size:13px;color:var(--ink-2);line-height:1.4}
+.menuitem.danger .mititle{color:var(--sev-high)}
 .emptyhint{padding:8px 12px;font-size:13px;color:var(--ink-3)}
 
 .railbtn{
@@ -874,6 +891,7 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
   background:var(--accent-soft);border-bottom:1px solid var(--line-2);
 }
 .ubtxt{flex:1;font-size:13.5px;line-height:1.45;color:var(--ink);min-width:200px}
+.ubrow{display:flex;gap:8px;flex:0 0 auto;align-items:center}
 .ubtxt b{font-weight:700;color:var(--accent-ink)}
 .ubbtn{
   padding:7px 15px;border-radius:var(--r-pill);background:var(--ink);color:var(--paper);
@@ -882,7 +900,14 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .ubbtn:hover{opacity:.88}
 .ubbtn.ghost{background:transparent;color:var(--ink-2);border:1px solid var(--line)}
 .ubbtn.ghost:hover{background:var(--surface);opacity:1}
-@media(max-width:899px){.updatebar{padding:12px 16px}}
+@media(max-width:899px){
+  /* Text on its own line, then both buttons together on the next. Letting them
+     wrap freely put one button beside the text and orphaned the other. */
+  .updatebar{padding:12px 16px;flex-direction:column;align-items:stretch;gap:10px}
+  .ubtxt{min-width:0}
+  .ubrow{width:100%}
+  .ubrow .ubbtn{flex:1;text-align:center}
+}
 
 
 .syncdot{width:7px;height:7px;border-radius:50%;margin-left:auto;flex:0 0 auto;background:var(--ink-3)}
@@ -890,6 +915,60 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .syncdot.syncing{background:var(--sev-med);animation:pl 1.2s ease-in-out infinite}
 .syncdot.conflict{background:var(--sev-med)}
 .syncdot.error{background:var(--sev-high)}
+
+
+/* ---------- focus scrim ----------
+   When the app is asking a question, everything behind it steps back. The panel
+   sits just above the input, so without this the eye keeps drifting to the card
+   above it and the question gets skipped. */
+.focusscrim[hidden]{display:none}
+.focusscrim{
+  position:fixed;inset:0;z-index:45;background:rgba(0,0,0,.34);
+  backdrop-filter:blur(5px) saturate(.85);-webkit-backdrop-filter:blur(5px) saturate(.85);
+  animation:fi .26s cubic-bezier(.2,.7,.3,1) both;
+}
+.composer{position:relative;z-index:50}
+@media (prefers-reduced-motion:reduce){.focusscrim{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(0,0,0,.5)}}
+
+
+/* ---------- onboarding ---------- */
+.tour{display:flex;flex-direction:column;gap:0}
+.tour .wtag{margin-bottom:14px}
+.tourttl{
+  font-size:clamp(23px,5.2vw,30px);font-weight:700;line-height:1.18;letter-spacing:-.032em;
+  margin:20px 0 12px;text-wrap:balance;
+}
+.tourbody{font-size:15.5px;line-height:1.6;color:var(--ink-2);margin:0 0 22px;letter-spacing:-.011em}
+.tourart{
+  border-radius:var(--r-box);background:var(--surface-2);padding:22px;
+  display:grid;place-items:center;min-height:150px;
+}
+.tspine{display:flex;flex-direction:column;gap:16px;width:100%;max-width:300px}
+.tnode{display:flex;align-items:center;gap:13px;position:relative}
+.tnode::before{content:"";position:absolute;left:5px;top:16px;bottom:-16px;width:2px;background:var(--line)}
+.tnode:last-child::before{display:none}
+.tdot{width:12px;height:12px;border-radius:50%;flex:0 0 auto;background:var(--surface);border:2px solid var(--ink-3);z-index:1}
+.tnode.n1 .tdot{border-color:var(--sev-med)}
+.tnode.n2 .tdot{border-color:var(--sev-high);background:var(--sev-high)}
+.tlabel{font-size:14.5px;font-weight:600;letter-spacing:-.016em}
+.tnode.n2 .tlabel{color:var(--sev-high)}
+.tchips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.tchip{
+  font-size:13.5px;font-weight:500;padding:7px 14px;border-radius:var(--r-pill);
+  border:1px solid var(--line);background:var(--surface);
+}
+.tchip.q{border:none;background:transparent;color:var(--ink-2);font-weight:600;width:100%;text-align:center;padding:0 0 4px}
+.tchip.on{background:var(--ink);color:var(--surface);border-color:var(--ink);font-weight:600}
+.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;width:100%}
+.tcell{display:flex;flex-direction:column;gap:3px;padding:12px 14px;background:var(--surface);border-radius:var(--r-box)}
+.tk{font-size:12px;font-weight:600;color:var(--ink-3)}
+.tv{font-size:14px;font-weight:600;letter-spacing:-.014em}
+.tgrid.two .tv{font-weight:400;color:var(--ink-2);font-size:13.5px;letter-spacing:-.01em}
+.tdots{display:flex;gap:7px;justify-content:center;margin-bottom:20px}
+.tdotnav{width:7px;height:7px;border-radius:50%;background:var(--line);transition:background .2s,width .2s}
+.tdotnav:hover{background:var(--ink-3)}
+.tdotnav.on{background:var(--ink);width:22px;border-radius:var(--r-pill)}
+@media(max-width:520px){.tgrid{grid-template-columns:1fr}}
 
 /* ---------- responsive ---------- */
 .backdrop{display:none}
@@ -910,6 +989,8 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
   details.gaps summary{padding:15px 18px}
   .cfoot{padding:0 18px 18px}
   .storebar{padding:12px 16px}
+  .sbrow{width:100%}
+  .sbrow .sbbtn{flex:1;text-align:center}
   .cantalt{flex-direction:column;gap:3px}
   .challenge{margin:0 18px 16px}
   .chtest{flex-direction:column;gap:3px}
@@ -947,6 +1028,10 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 7A5.5 5.5 0 003.6 4.2M2.5 9A5.5 5.5 0 0012.4 11.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13.8 2.6v3.2h-3.2M2.2 13.4v-3.2h3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span id="syncLabel">Synced</span><span class="syncdot" id="syncDot"></span>
       </button>
+      <button class="railbtn" id="btnTour">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.2" stroke="currentColor" stroke-width="1.4"/><path d="M6.3 6.1a1.8 1.8 0 113.1 1.2c-.5.5-1.4.8-1.4 1.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".85" fill="currentColor"/></svg>
+        How this works
+      </button>
       <button class="railbtn" id="btnSettings">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.6v1.8M8 12.6v1.8M14.4 8h-1.8M3.4 8H1.6M12.5 3.5l-1.3 1.3M4.8 11.2l-1.3 1.3M12.5 12.5l-1.3-1.3M4.8 4.8L3.5 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
         Settings
@@ -968,6 +1053,7 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
       </button>
     </div>
 
+    <div class="focusscrim" id="focusScrim" hidden></div>
     <div class="updatebar" id="updateBar" hidden></div>
     <div class="storebar" id="storeBar" hidden></div>
     <div class="stream" id="stream"><div class="streamin" id="streamIn"></div></div>
@@ -1890,7 +1976,10 @@ function showStorageBanner() {
 }
 const activeWs = () => S.workspaces.find(w => w.id === S.activeWs) || S.workspaces[0];
 const activeChat = () => S.chats.find(c => c.id === S.activeChat) || null;
-const wsChats = wsId => S.chats.filter(c => c.wsId === wsId).sort((a, b) => b.updated - a.updated);
+/* Pinned first, then most recent. Pinning is the only way a long list stays
+   usable, because "most recent" buries the thing you keep coming back to. */
+const wsChats = wsId => S.chats.filter(c => c.wsId === wsId)
+  .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updated - a.updated);
 
 /* Four things the simulator needs about you. Named, not counted: "3 of 4" tells
    the user nothing they can act on, and naming the missing one is the same
@@ -3508,16 +3597,20 @@ function renderRail() {
     const list = el("div", "wslist");
     if (!chats.length) list.appendChild(el("div", "emptyhint", "No simulations yet"));
     chats.forEach(c => {
-      const r = el("button", "chatrow" + (c.id === S.activeChat ? " on" : ""));
+      const r = el("button", "chatrow" + (c.id === S.activeChat ? " on" : "") + (c.pinned ? " pinned" : ""));
+      if (c.pinned) {
+        const p = el("span", "pinmark");
+        p.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M9.6 1.8l4.6 4.6-1.6 1.6-1-.3-3 3 .4 2.2-1.3 1.3-2.8-2.8L2 14.3l-.3-.3 2.9-2.9L1.8 8.3 3.1 7l2.2.4 3-3-.3-1z" fill="currentColor"/></svg>';
+        r.appendChild(p);
+      }
       r.appendChild(el("span", "t", c.title));
-      const x = el("span", "x", "×");
-      x.onclick = e => {
-        e.stopPropagation();
-        S.chats = S.chats.filter(z => z.id !== c.id);
-        if (S.activeChat === c.id) S.activeChat = null;
-        save(); renderRail(); renderStream();
-      };
-      r.appendChild(x);
+      // One menu rather than three hover icons. Hover does not exist on a phone,
+      // and three targets in a 30 pixel row is not a real target on either.
+      const m = el("span", "rowmenu");
+      m.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3.2" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="12.8" r="1.3" fill="currentColor"/></svg>';
+      m.title = "More";
+      m.onclick = e => { e.stopPropagation(); openChatMenu(c); };
+      r.appendChild(m);
       r.onclick = () => { S.activeChat = c.id; S.activeWs = ws.id; save(); renderRail(); renderStream(); closeRail(); };
       list.appendChild(r);
     });
@@ -3717,6 +3810,195 @@ function openSheet(title, build) {
   $("#scrim").classList.add("on");
 }
 const closeSheet = () => $("#scrim").classList.remove("on");
+
+/* ------------------------------------------------------------
+   ONBOARDING
+
+   Five screens, and each one earns its place by teaching something
+   a person would otherwise get wrong on their first try: that it
+   reasons rather than looks things up, that it will ask before
+   answering a vague question, that the context pack is what makes
+   answers specific, and that a key and sync are optional rather
+   than required. Every screen can be skipped.
+   ------------------------------------------------------------ */
+const TOUR = [
+  {
+    tag: "What this is",
+    title: "It works out how people will react.",
+    body: "You describe a move you are considering. A price, a launch, a tender, a competitor, a cost shock, a code change. It works out who reacts, what they do about it, and what that turns into a few months later.",
+    art: "cascade"
+  },
+  {
+    tag: "How to read an answer",
+    title: "The end is rarely the same problem as the start.",
+    body: "Every answer plays out over three stages. A price cut looks like a margin problem on day one. A quarter later it is a channel problem. A year later it is a specification problem. That drift is the thing worth seeing, and a single answer from a chatbot stops at the first one.",
+    art: "stages"
+  },
+  {
+    tag: "It will ask you things",
+    title: "A vague question gets a vague answer, so it asks first.",
+    body: "If you leave out who, where, or over what period, it stops and asks before spending anything. Your half sentence is visibly rewritten into a proper brief, which is also how you learn what a good question looks like.",
+    art: "ask"
+  },
+  {
+    tag: "What makes it yours",
+    title: "Tell it who you are, once.",
+    body: "Your company, your market, real competitor names, your price anchor, and how buying actually works where you sell. That context goes into every simulation, and it is the whole difference between an answer about you and an answer about any company anywhere.",
+    art: "context"
+  },
+  {
+    tag: "Optional, both of them",
+    title: "A key to run live. Drive to sync.",
+    body: "Without a key it runs in demo mode with real prepared examples. Add your own Gemini key and it runs live, using no web search, so it costs a fraction of a rupee. Sign in with Google and your work follows you between your phone and your laptop, stored in your own Drive where only this app can see it.",
+    art: "optional"
+  }
+];
+
+function tourArt(kind) {
+  const w = el("div", "tourart " + kind);
+  if (kind === "cascade" || kind === "stages") {
+    const names = kind === "stages"
+      ? ["What happens first", "What that sets off", "Where it ends up"]
+      : ["Your fabricators", "A rival", "The specification"];
+    const sp = el("div", "tspine");
+    names.forEach((n, i) => {
+      const row = el("div", "tnode n" + i);
+      row.appendChild(el("span", "tdot"));
+      row.appendChild(el("span", "tlabel", n));
+      sp.appendChild(row);
+    });
+    w.appendChild(sp);
+  } else if (kind === "ask") {
+    const q = el("div", "tchips");
+    ["Which competitor?", "Reynaers", "Low cost imports", "Not one in particular"].forEach((t, i) => {
+      q.appendChild(el("span", "tchip" + (i === 0 ? " q" : i === 1 ? " on" : ""), t));
+    });
+    w.appendChild(q);
+  } else if (kind === "context") {
+    const g = el("div", "tgrid");
+    [["Company", "Schüco India"], ["Market", "India, premium"], ["Competitors", "Reynaers, Aluk"], ["Buying works by", "Lowest price wins"]]
+      .forEach(([k, v]) => {
+        const c = el("div", "tcell");
+        c.appendChild(el("span", "tk", k));
+        c.appendChild(el("span", "tv", v));
+        g.appendChild(c);
+      });
+    w.appendChild(g);
+  } else {
+    const g = el("div", "tgrid two");
+    [["Demo mode", "No key. Real prepared examples."], ["Live mode", "Your key. Fractions of a rupee."],
+     ["This device", "Everything stays in the browser."], ["With Drive", "Same work on phone and laptop."]]
+      .forEach(([k, v]) => {
+        const c = el("div", "tcell");
+        c.appendChild(el("span", "tk", k));
+        c.appendChild(el("span", "tv", v));
+        g.appendChild(c);
+      });
+    w.appendChild(g);
+  }
+  return w;
+}
+
+function openTour(startAt) {
+  let i = startAt || 0;
+  const paint = () => {
+    const step = TOUR[i];
+    // openSheet builds the body before attaching it, so parentElement is null in
+    // here. The title is passed in rather than reached for.
+    openSheet("How this works", s => {
+      const box = el("div", "tour");
+      box.appendChild(el("div", "wtag", step.tag));
+      box.appendChild(tourArt(step.art));
+      const h = el("h2", "tourttl"); h.textContent = step.title; box.appendChild(h);
+      box.appendChild(el("p", "tourbody", step.body));
+
+      const dots = el("div", "tdots");
+      TOUR.forEach((_, n) => {
+        const d = el("button", "tdotnav" + (n === i ? " on" : ""));
+        d.title = TOUR[n].tag;
+        d.onclick = () => { i = n; paint(); };
+        dots.appendChild(d);
+      });
+      box.appendChild(dots);
+
+      const row = el("div", "btnrow");
+      if (i > 0) { const b = el("button", "btn", "Back"); b.onclick = () => { i--; paint(); }; row.appendChild(b); }
+      const skip = el("button", "btn", i === TOUR.length - 1 ? "Close" : "Skip");
+      skip.onclick = () => { S.tourDone = true; save(); closeSheet(); };
+      row.appendChild(skip);
+      if (i < TOUR.length - 1) {
+        const n = el("button", "btn pri", "Next");
+        n.onclick = () => { i++; paint(); };
+        row.appendChild(n);
+      } else {
+        const done = el("button", "btn pri", "Set up my workspace");
+        done.onclick = () => { S.tourDone = true; save(); closeSheet(); openWorkspace(activeWs().id); };
+        row.appendChild(done);
+      }
+      box.appendChild(row);
+      s.appendChild(box);
+    });
+  };
+  paint();
+}
+
+function openChatMenu(c) {
+  openSheet(c.title, s => {
+    const opts = el("div", "menulist");
+
+    const mk = (label, note, fn, danger) => {
+      const b = el("button", "menuitem" + (danger ? " danger" : ""));
+      b.appendChild(el("div", "mititle", label));
+      if (note) b.appendChild(el("div", "minote", note));
+      b.onclick = fn;
+      opts.appendChild(b);
+    };
+
+    mk(c.pinned ? "Unpin" : "Pin to the top",
+       c.pinned ? "It will go back to sitting in date order" : "Pinned simulations stay above the rest in this workspace",
+       () => { c.pinned = !c.pinned; save(); renderRail(); closeSheet(); toast(c.pinned ? "Pinned" : "Unpinned"); });
+
+    mk("Rename", "Currently: " + c.title, () => {
+      const v = prompt("Name this simulation", c.title);
+      if (v && v.trim()) { c.title = v.trim().slice(0, 80); save(); renderRail(); renderStream(); }
+      closeSheet();
+    });
+
+    s.appendChild(opts);
+
+    const others = S.workspaces.filter(w => w.id !== c.wsId);
+    const mv = el("div", "fld");
+    mv.appendChild(el("label", "", "Move to another workspace"));
+    if (!others.length) {
+      mv.appendChild(el("div", "hint", "There is only one workspace. Create another and this simulation can be moved into it."));
+    } else {
+      mv.appendChild(el("div", "hint", "The simulation keeps everything it already said. What changes is the context it uses if you ask a follow up, because that comes from the workspace it lives in."));
+      const row = el("div", "clopts");
+      others.forEach(w => {
+        const b = el("button", "clopt", w.name);
+        b.onclick = () => {
+          c.wsId = w.id; c.updated = Date.now();
+          S.activeWs = w.id; S.activeChat = c.id;
+          save(); renderRail(); renderStream(); closeSheet();
+          toast("Moved to " + w.name);
+        };
+        row.appendChild(b);
+      });
+      mv.appendChild(row);
+    }
+    s.appendChild(mv);
+
+    const del = el("button", "btn danger", "Delete this simulation");
+    del.onclick = () => {
+      if (!confirm("Delete " + QL + c.title + QR + "? This cannot be undone.")) return;
+      S.chats = S.chats.filter(z => z.id !== c.id);
+      S.signals = S.signals.filter(x => x.chatId !== c.id);
+      if (S.activeChat === c.id) S.activeChat = null;
+      save(); renderRail(); renderStream(); closeSheet(); toast("Deleted");
+    };
+    s.appendChild(del);
+  });
+}
 
 function openModes(onPick) {
   openSheet("What are you testing?", s => {
@@ -4602,6 +4884,7 @@ function openCannot(text, why) {
   closeClarify();
   const c = $("#clarify"); c.hidden = false; c.innerHTML = "";
   c.classList.add("cannot");
+  setFocus(true, () => { closeCannot(); $("#ta").focus(); });
   const head = el("div", "clhead");
   head.appendChild(el("span", "cantttl", "This is not a question Sightline can answer"));
   c.appendChild(head);
@@ -4635,16 +4918,28 @@ function openCannot(text, why) {
 }
 function closeCannot() {
   const c = $("#clarify"); c.hidden = true; c.innerHTML = ""; c.classList.remove("cannot");
+  setFocus(false);
+}
+
+function setFocus(on, onDismiss) {
+  const f = $("#focusScrim");
+  if (!f) return;
+  f.hidden = !on;
+  // Clicking away closes the question but keeps what was typed, so nothing the
+  // user wrote is lost by a stray tap.
+  f.onclick = on ? (onDismiss || null) : null;
 }
 
 function closeClarify() {
   clarifyState = null;
   const c = $("#clarify"); c.hidden = true; c.innerHTML = ""; c.classList.remove("cannot");
+  setFocus(false);
 }
 
 function openClarify(text, mode, gaps, askMode) {
   clarifyState = { base: text, mode, gaps, idx: 0, picked: {}, custom: {}, askMode: !!askMode };
   $("#clarify").hidden = false;
+  setFocus(true, () => { const t = clarifyState ? clarifyState.base : ""; closeClarify(); $("#ta").value = t; autosize(); updateSend(); });
   paintClarify();
   scrollDown();
 }
@@ -4893,15 +5188,17 @@ function showUpdateBar(reg) {
   const t = el("div", "ubtxt");
   t.innerHTML = "<b>A new version is ready.</b> Your workspaces, facts and history are untouched by this.";
   bar.appendChild(t);
+  const row = el("div", "ubrow");
   const go = el("button", "ubbtn", "Reload now");
   go.onclick = () => {
     if (reg.waiting) reg.waiting.postMessage("applyUpdate");
     setTimeout(() => location.reload(), 120);
   };
-  bar.appendChild(go);
+  row.appendChild(go);
   const later = el("button", "ubbtn ghost", "Not now");
   later.onclick = () => { bar.hidden = true; };
-  bar.appendChild(later);
+  row.appendChild(later);
+  bar.appendChild(row);
 }
 
 function watchForUpdates() {
@@ -4937,6 +5234,7 @@ function boot() {
   load();
   if (S.theme) document.documentElement.setAttribute("data-theme", S.theme);
   probeStorage(); showStorageBanner(); watchForUpdates();
+  if (!S.tourDone && !S.chats.length) setTimeout(() => openTour(0), 400);
   syncMode(); renderRail(); renderStream(); updateSend();
 
   $("#ta").addEventListener("input", () => { autosize(); updateSend(); });
@@ -4955,6 +5253,7 @@ function boot() {
     save(); renderRail(); renderStream(); openWorkspace(w.id);
   };
   $("#btnSettings").onclick = openSettings;
+  $("#btnTour").onclick = () => openTour(0);
   $("#btnSync").onclick = openSettings;
   if (S.gsync && S.gsync.clientId && S.gsync.token) setSyncBadge("ok");
   $("#btnSignals").onclick = openSignals;
@@ -4968,7 +5267,16 @@ function boot() {
   $("#hamb").onclick = openRail;
   $("#backdrop").onclick = closeRail;
   $("#scrim").onclick = e => { if (e.target === $("#scrim")) closeSheet(); };
-  document.addEventListener("keydown", e => { if (e.key === "Escape") { closeSheet(); closeRail(); } });
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    if (!$("#clarify").hidden) {
+      const t = clarifyState ? clarifyState.base : $("#ta").value;
+      closeClarify(); closeCannot();
+      if (t) { $("#ta").value = t; autosize(); updateSend(); }
+      return;
+    }
+    closeSheet(); closeRail();
+  });
   $("#btnTheme").onclick = () => {
     const cur = document.documentElement.getAttribute("data-theme");
     const dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme:dark)").matches;
