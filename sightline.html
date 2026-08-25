@@ -4511,7 +4511,12 @@ async function gSignIn(interactive) {
             save(); res(g.token);
           } else rej(new Error("Google did not return access."));
         },
-        error_callback: e => rej(new Error((e && e.type === "popup_closed") ? "Sign in was closed before it finished." : "Google sign in failed."))
+        error_callback: e => {
+          const t = (e && e.type) || "";
+          if (t === "popup_closed") return rej(new Error("Sign in was closed before it finished."));
+          if (t === "popup_failed_to_open") return rej(new Error("The sign in window was blocked. Allow popups for this site and try again."));
+          rej(new Error("Google refused the sign in. If its page said 401 invalid_client, the OAuth client is almost certainly not of type Web application, or you pasted the client secret instead of the client ID. The setup notes above cover both."));
+        }
       });
       tokenClient.requestAccessToken({ prompt: interactive ? "consent" : "" });
     } catch (e) { rej(e); }
@@ -4710,7 +4715,12 @@ function openSettings() {
         "<li>Open <b>Credentials</b>, then <b>Create credentials</b>, then <b>OAuth client ID</b>. Choose <b>Web application</b>.</li>" +
         "<li>Under <b>Authorised JavaScript origins</b> add exactly:<br><b>" + esc(location.origin) + "</b></li>" +
         "<li>Create it, copy the <b>Client ID</b>, and paste it below. It ends in <b>.apps.googleusercontent.com</b>.</li>" +
-        "</ul>A client ID is not a secret. It is meant to be visible in the page.";
+        "</ul>A client ID is not a secret. It is meant to be visible in the page." +
+        "<br><br><b>If Google says 401 invalid_client</b>, it does not recognise the ID for this kind of sign in. Three causes, in order of likelihood:<ul>" +
+        "<li><b>The application type is wrong.</b> It must be <b>Web application</b>. Desktop app, Android, iOS and TV all fail this way, and the type cannot be changed after creation. Delete it and make a new one.</li>" +
+        "<li><b>You pasted the client secret.</b> That screen shows two values. You want the one ending in <b>.apps.googleusercontent.com</b>.</li>" +
+        "<li><b>Wrong project.</b> If you have several, the client must be in the project you enabled the Drive API on.</li>" +
+        "</ul><b>If Google says origin mismatch</b>, the address in <b>Authorised JavaScript origins</b> does not match this page exactly. It must be <b>" + esc(location.origin) + "</b>, with no trailing slash and no path.";
       steps.appendChild(st);
       setup.appendChild(steps);
       sy.appendChild(setup);
@@ -4718,8 +4728,20 @@ function openSettings() {
       const ci = el("input");
       ci.placeholder = "Paste your Client ID, ending in .apps.googleusercontent.com";
       ci.value = g.clientId || "";
-      ci.oninput = () => { g.clientId = ci.value.trim(); save(); };
+      const ciWarn = el("div", "hint");
+      const checkCi = () => {
+        const v = (g.clientId || "").trim();
+        if (!v) { ciWarn.textContent = ""; ciWarn.style.color = ""; return; }
+        // A soft note, never a block. The only real test is asking Google.
+        if (!/\.apps\.googleusercontent\.com$/.test(v)) {
+          ciWarn.innerHTML = "That does not end in <b>.apps.googleusercontent.com</b>, which every client ID does. If you copied the client secret by mistake, Google will answer with 401 invalid_client.";
+          ciWarn.style.color = "var(--sev-med)";
+        } else { ciWarn.textContent = "That looks like a client ID."; ciWarn.style.color = ""; }
+      };
+      ci.oninput = () => { g.clientId = ci.value.trim(); save(); checkCi(); };
       sy.appendChild(ci);
+      checkCi();
+      sy.appendChild(ciWarn);
 
       const st2 = el("div", "hint");
       const stamp = g.lastSync ? new Date(g.lastSync).toLocaleString() : "never";
