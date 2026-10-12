@@ -5,9 +5,8 @@
 Thumbs.db
 *.log
 
-# Internal working documents are deliberately kept out of this repository and live
-# alongside it instead, in ../Sightline docs/. Listed here so that dropping a copy
-# back into the folder does not quietly publish it.
+# Internal working documents are deliberately kept outside this repository.
+# Listed here so that dropping a copy back into the folder does not quietly publish it.
 PRD.md
 ARCHITECTURE.md
 DESIGN.md
