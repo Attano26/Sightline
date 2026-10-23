@@ -3249,7 +3249,16 @@ async function callGeminiOnce(key, sys, user, schema, mode, o) {
   o = o || {};
   const model = o.model || MODEL_FAST;
   const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent";
-  const res = await fetch(url, {
+  /* A request with no time limit can hang for minutes on an overloaded model,
+     with the screen saying "Reading that" the whole time. Past the limit it counts
+     as the model being unavailable, so the chain moves on to the next one. */
+  const ac = typeof AbortController === "function" ? new AbortController() : null;
+  const limit = o.timeout || (model === MODEL_FAST ? 30000 : 75000);
+  const timer = ac ? setTimeout(() => ac.abort(), limit) : 0;
+  let res;
+  try {
+    res = await fetch(url, {
+    signal: ac ? ac.signal : undefined,
     method:"POST",
     headers: Object.assign({ "Content-Type":"application/json" }, authHeader(key, mode)),
     body: JSON.stringify({
@@ -3261,7 +3270,16 @@ async function callGeminiOnce(key, sys, user, schema, mode, o) {
       }
     })
   });
+  } catch (e) {
+    clearTimeout(timer);
+    if (e && e.name === "AbortError") {
+      const er = new Error(model + " did not answer within " + Math.round(limit / 1000) + " seconds.");
+      er.status = 504; er.kind = "timeout"; throw er;
+    }
+    throw e;
+  }
   if (!res.ok) {
+    clearTimeout(timer);
     let detail = "", reason = "";
     try {
       const j = await res.json();
@@ -3274,7 +3292,13 @@ async function callGeminiOnce(key, sys, user, schema, mode, o) {
     err.status = res.status; err.reason = reason; err.mode = mode;
     throw err;
   }
-  const j = await res.json();
+  let j;
+  try { j = await res.json(); }
+  catch (e) {
+    const er = new Error(e && e.name === "AbortError" ? model + " stopped answering part way through." : "The model's reply could not be read.");
+    er.status = 504; er.kind = "timeout"; throw er;
+  }
+  finally { clearTimeout(timer); }
   const cand = (j.candidates || [])[0];
   if (!cand) { const e = new Error("The model returned nothing."); e.kind = "empty"; throw e; }
   if (cand.finishReason && cand.finishReason !== "STOP") {
@@ -4876,6 +4900,8 @@ async function run(text, useMode) {
       errTurn = { role:"error", title:"The key works, the model does not.", body:" This project cannot reach " + MODEL + ", usually because billing is not active on it.", action:"Open key settings" };
     } else if (st === 429) {
       errTurn = { role:"error", title:"Rate limited.", body:" Google is throttling this key, usually a free tier quota. Wait a minute, or enable billing on the key's project.", action:"Open key settings" };
+    } else if (e.kind === "timeout" || st === 503 || st === 504) {
+      errTurn = { role:"error", title:"Google's models are overloaded just now.", body:" Every model tried was busy or too slow to answer. This is on Google's side and usually passes within minutes. Google said: " + (e.message || "") };
     } else if (e.kind === "truncated") {
       errTurn = { role:"error", title:"The answer was cut off.", body:" The model ran out of room before finishing. Try a shorter, more specific question." };
     } else if (e.kind === "parse" || e.kind === "empty") {
