@@ -605,6 +605,22 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 }
 .smalltxt{font-size:15.5px;line-height:1.55;letter-spacing:-.011em}
 .smallfail{font-size:13px;line-height:1.45;color:var(--ink-3);margin-top:8px}
+/* Spreadsheet reader. Stacked rows, not a table: RULES rule 19. */
+.xllist{display:flex;flex-direction:column;gap:8px}
+.xlline{display:flex;gap:10px;align-items:flex-start;width:100%;padding:12px 14px;border:1px solid var(--line);
+  border-radius:var(--r-box);background:var(--surface);text-align:left;font-size:14px;line-height:1.45;color:var(--ink);
+  overflow-wrap:anywhere}
+.xlline:hover{border-color:var(--ink-3)}
+.xlline.on{border-color:var(--ink)}
+.xltick{flex:0 0 18px;height:18px;margin-top:1px;border:1.5px solid var(--ink-3);border-radius:5px;display:flex;
+  align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--surface)}
+.xlline.on .xltick{background:var(--ink);border-color:var(--ink)}
+.xlbars{display:flex;flex-direction:column;gap:6px;margin:4px 0}
+.xlbar{display:grid;grid-template-columns:minmax(0,9em) minmax(0,1fr) auto;gap:10px;align-items:center;font-size:13px;color:var(--ink-2)}
+.xln{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xlt{display:block;height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden}
+.xlb{display:block;height:100%;border-radius:4px;background:var(--accent)}
+.xlv{font-variant-numeric:tabular-nums;color:var(--ink)}
 .smallsug{display:flex;flex-direction:column;gap:8px}
 /* Left aligned, and roomy. These hold whole sentences, and pill styling built
    for one or two words centred them and squeezed them. */
@@ -2562,6 +2578,11 @@ function ctxMissing(ws) {
 /* ============================================================
    PROMPT + SCHEMA
    ============================================================ */
+/* How many saved facts go with each simulation, newest first. It was 14, which
+   the Schüco India preset nearly filled on its own, so the first spreadsheet
+   lines saved would have silently pushed the oldest facts out. */
+const FACTS_SENT = 30;
+
 function contextPack(ws) {
   const c = ws.ctx || {};
   const lines = [];
@@ -2580,7 +2601,7 @@ function contextPack(ws) {
   if (bh.length) lines.push(["HOW BUYING ACTUALLY WORKS IN THIS MARKET. This is the user's own description of local commercial practice. Reason with it. It outranks any general assumption you hold about how this industry behaves:"].concat(bh).join(NL));
   if (ws.facts && ws.facts.length) {
     lines.push("Facts this user has confirmed in past sessions (treat as USER-PROVIDED):");
-    ws.facts.slice(-14).forEach(f => lines.push("  • " + f.text));
+    ws.facts.slice(-FACTS_SENT).forEach(f => lines.push("  • " + f.text));
   }
   return lines.length ? lines.join("\n") : "(The user has not filled in a context pack. Say so in evidence gaps.)";
 }
@@ -3034,7 +3055,7 @@ function cardFlat(o) {
 
 function checkPrompt(ws) {
   const c = ws.ctx || {};
-  const facts = (ws.facts || []).slice(-14).map((f, i) => "F" + (i + 1) + ". " + f.text);
+  const facts = (ws.facts || []).slice(-FACTS_SENT).map((f, i) => "F" + (i + 1) + ". " + f.text);
   return "You check a market simulation card for a facade and fenestration business. You do not rewrite it." + NL +
     "Report three things, and ONLY by copying exact words. A finding you cannot quote is not a finding." + NL + NL +
     "1. CONFLICTS. A sentence on the card that cannot be true if a saved fact or industry rule below is true. " +
@@ -5219,6 +5240,349 @@ const closeSheet = () => $("#scrim").classList.remove("on");
 const appLogo = () => { const s = $("#rail .mark").cloneNode(true); s.removeAttribute("class"); return s; };
 
 /* ------------------------------------------------------------
+   READING A SPREADSHEET
+
+   A price list or a tender history holds the real figures the
+   simulator otherwise has to do without. The rule, agreed before a
+   line was written: the model never sees the sheet.
+
+   Everything here runs on the device. The file is read, the columns
+   are typed, and the averages, ranges, breakdowns and trends are
+   worked out in this page. The person then picks which of those
+   lines to keep, and only the kept lines become workspace facts.
+   Facts are the one thing a simulation is sent, so a sheet of four
+   thousand rows reaches the model, if at all, as two or three
+   sentences the person chose.
+
+   Two reasons, both said to the user in plain words. Language models
+   are unreliable at arithmetic over tables, and Google's free tier
+   may use what it is sent to improve its products, which matters for
+   price lists and tender history.
+
+   The reader is SheetJS, about a megabyte, so it is fetched the first
+   time it is needed rather than carried by every page load, with an
+   integrity hash so a changed file is refused. It needs a connection
+   that first time.
+   ------------------------------------------------------------ */
+const SHEETJS_URL = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
+const SHEETJS_SRI = "sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT";
+const XL_MAX_BYTES = 15 * 1024 * 1024;
+const XL_MAX_ROWS = 100000;
+let sheetjsLoading = null;
+
+function loadSheetJS() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (sheetjsLoading) return sheetjsLoading;
+  sheetjsLoading = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = SHEETJS_URL; s.integrity = SHEETJS_SRI; s.crossOrigin = "anonymous";
+    s.onload = () => window.XLSX ? res(window.XLSX) : rej(new Error("The spreadsheet reader loaded but did not start."));
+    s.onerror = () => { sheetjsLoading = null; s.remove(); rej(new Error("The spreadsheet reader could not be loaded. It needs a connection the first time it is used.")); };
+    document.head.appendChild(s);
+  });
+  return sheetjsLoading;
+}
+
+/* "₹12,000", "12,000 INR", "12.5%", "(1,200)" are all numbers to a person. */
+function xlNum(v) {
+  if (typeof v === "number") return isFinite(v) ? v : NaN;
+  if (typeof v !== "string") return NaN;
+  let s = v.trim();
+  if (!s) return NaN;
+  let neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  s = s.replace(/₹|rs\.?|inr|eur|€|usd|\$|%|,|\s/gi, "");
+  if (!/^-?\d*\.?\d+$/.test(s)) return NaN;
+  const n = parseFloat(s);
+  return neg ? -n : n;
+}
+function xlDate(v) {
+  if (v instanceof Date && !isNaN(v)) return v;
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v.trim())) { const d = new Date(v.trim()); return isNaN(d) ? null : d; }
+  return null;
+}
+const xlBlank = v => v == null || (typeof v === "string" && !v.trim());
+
+function xlFmt(n, pct) {
+  const abs = Math.abs(n);
+  const dp = abs >= 100 ? 0 : abs >= 1 ? 1 : 2;
+  const r = Number(n.toFixed(dp));
+  return r.toLocaleString("en-IN", { maximumFractionDigits: dp }) + (pct ? " percent" : "");
+}
+const XL_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const xlDay = d => d.getDate() + " " + XL_MONTHS[d.getMonth()] + " " + d.getFullYear();
+const xlMonth = d => XL_MONTHS[d.getMonth()] + " " + d.getFullYear();
+
+/* The header is the first row, within the first fifteen, that has at least two
+   cells and is mostly words. Sheets often open with a title and a blank line. */
+function xlHeaderRow(rows) {
+  for (let i = 0; i < Math.min(15, rows.length); i++) {
+    const cells = (rows[i] || []).filter(v => !xlBlank(v));
+    if (cells.length < 2) continue;
+    const wordy = cells.filter(v => typeof v === "string" && isNaN(xlNum(v))).length;
+    if (wordy / cells.length >= 0.6) return i;
+  }
+  return -1;
+}
+
+function xlColumns(rows, hdr) {
+  const width = rows.reduce((m, r) => Math.max(m, (r || []).length), 0);
+  const head = hdr >= 0 ? rows[hdr] : [];
+  const data = rows.slice(hdr + 1).filter(r => r && r.some(v => !xlBlank(v)));
+  const cols = [];
+  for (let c = 0; c < width && cols.length < 40; c++) {
+    const raw = data.map(r => r[c]).filter(v => !xlBlank(v));
+    if (!raw.length) continue;
+    let name = head[c] != null && String(head[c]).trim() ? String(head[c]).trim() : "Column " + XLSX.utils.encode_col(c);
+    const nums = raw.map(xlNum).filter(v => !isNaN(v));
+    const dates = raw.map(xlDate).filter(Boolean);
+    const pct = raw.filter(v => typeof v === "string" && /%/.test(v)).length > raw.length / 2 || /percent|%|margin/i.test(name);
+    const col = { c, name, filled: raw.length };
+    if (dates.length >= raw.length * 0.8) {
+      col.type = "date"; col.dates = data.map(r => xlDate(r[c]));
+      // reduce, not Math.min(...t): spreading a hundred thousand arguments can overflow the stack.
+      const t = dates.map(d => d.getTime());
+      col.min = new Date(t.reduce((a, b) => Math.min(a, b))); col.max = new Date(t.reduce((a, b) => Math.max(a, b)));
+    } else if (nums.length >= raw.length * 0.8) {
+      col.type = "number"; col.pct = pct; col.vals = data.map(r => xlNum(r[c]));
+      const v = nums.slice().sort((a, b) => a - b);
+      col.n = v.length; col.sum = v.reduce((a, b) => a + b, 0); col.mean = col.sum / v.length;
+      col.median = v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2;
+      col.min = v[0]; col.max = v[v.length - 1];
+    } else {
+      col.type = "text"; col.texts = data.map(r => xlBlank(r[c]) ? null : String(r[c]).trim());
+      const counts = {};
+      col.texts.forEach(t => { if (t) counts[t] = (counts[t] || 0) + 1; });
+      col.distinct = Object.keys(counts).length;
+      col.top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    }
+    cols.push(col);
+  }
+  return { cols, rowCount: data.length };
+}
+
+function xlColumnLine(src, col) {
+  const q = s => QL + s + QR;
+  if (col.type === "number") {
+    return src + ": " + q(col.name) + " across " + col.n + " rows averages " + xlFmt(col.mean, col.pct) +
+      ", median " + xlFmt(col.median, col.pct) + ", lowest " + xlFmt(col.min, col.pct) + ", highest " + xlFmt(col.max, col.pct) +
+      (col.pct ? "." : ", total " + xlFmt(col.sum) + ".");
+  }
+  if (col.type === "date") return src + ": " + q(col.name) + " runs from " + xlDay(col.min) + " to " + xlDay(col.max) + ".";
+  // Free text, remarks or a project code on every row says nothing as a count.
+  if (col.distinct > 60 || !col.top.length || col.top[0][1] === 1) return null;
+  return src + ": " + q(col.name) + " has " + col.distinct + (col.distinct === 1 ? " value" : " different values") +
+    ". Most common: " + col.top.map(([t, n]) => t + " (" + n + (n === 1 ? " row)" : " rows)")).join(", ") + ".";
+}
+
+/* A column worth grouping by: a handful of values that repeat, such as a city or
+   a developer. A project code on every row groups nothing, and was the first
+   thing offered until this check. */
+const xlGroupable = c => c.type === "text" && c.distinct > 1 && c.distinct <= 30 && c.top.length && c.top[0][1] > 1 && c.distinct < c.filled;
+
+/* A numeric column broken down by a text column. Average by default, because a
+   total rewards whichever group simply has more rows. */
+function xlGroup(numCol, catCol, agg) {
+  const g = {};
+  numCol.vals.forEach((v, i) => {
+    const k = catCol.texts[i];
+    if (!k || isNaN(v)) return;
+    (g[k] = g[k] || []).push(v);
+  });
+  return Object.entries(g).map(([k, vs]) => ({ k, n: vs.length,
+    v: agg === "count" ? vs.length : agg === "sum" ? vs.reduce((a, b) => a + b, 0) : vs.reduce((a, b) => a + b, 0) / vs.length }))
+    .sort((a, b) => b.v - a.v);
+}
+
+/* Average by calendar month, first and last month compared. */
+function xlTrend(numCol, dateCol) {
+  const m = {};
+  numCol.vals.forEach((v, i) => {
+    const d = dateCol.dates[i];
+    if (!d || isNaN(v)) return;
+    const k = d.getFullYear() * 12 + d.getMonth();
+    (m[k] = m[k] || []).push(v);
+  });
+  const keys = Object.keys(m).map(Number).sort((a, b) => a - b);
+  return keys.map(k => ({ k, label: XL_MONTHS[k % 12].slice(0, 3) + " " + Math.floor(k / 12), full: XL_MONTHS[k % 12] + " " + Math.floor(k / 12),
+    v: m[k].reduce((a, b) => a + b, 0) / m[k].length, n: m[k].length }));
+}
+
+function xlBars(host, items, pct) {
+  const max = Math.max(...items.map(x => Math.abs(x.v))) || 1;
+  const box = el("div", "xlbars");
+  items.forEach(x => {
+    const r = el("div", "xlbar");
+    r.appendChild(el("span", "xln", x.label || x.k));
+    const track = el("span", "xlt"); const b = el("span", "xlb");
+    b.style.width = Math.max(2, Math.round(Math.abs(x.v) / max * 100)) + "%";
+    track.appendChild(b); r.appendChild(track);
+    r.appendChild(el("span", "xlv", xlFmt(x.v, pct)));
+    box.appendChild(r);
+  });
+  host.appendChild(box);
+}
+
+/* Reads a File and opens the panel. Exposed by name so it can be driven in a
+   browser test with a workbook built in the page. */
+async function readSpreadsheet(file, wsId) {
+  const ws = S.workspaces.find(w => w.id === wsId) || activeWs();
+  if (file.size > XL_MAX_BYTES) { toast("That file is over 15 MB. Save the sheet you need on its own and try again."); return; }
+  let XL;
+  try { XL = await loadSheetJS(); } catch (e) { toast(e.message); return; }
+  let wb;
+  try {
+    /* A CSV is decoded as UTF-8 text first. Handed over as raw bytes, SheetJS read
+       it in an older code page and "₹11,500" arrived as three garbled characters
+       and a number it could not see, so the whole price column read as text. */
+    if (/\.(csv|txt)$/i.test(file.name) || /csv|text\/plain/i.test(file.type || "")) {
+      wb = XL.read(await file.text(), { type: "string", cellDates: true, dense: true });
+    } else {
+      wb = XL.read(await file.arrayBuffer(), { cellDates: true, dense: true });
+    }
+  } catch (e) {
+    toast("That file could not be read as a spreadsheet. Excel and CSV files work."); return;
+  }
+  const st = { file: file.name, wb, ws, sheet: wb.SheetNames[0], keep: new Set(), gNum: null, gCat: null, agg: "avg", tNum: null, tDate: null };
+  xlPrepare(st);
+  xlPaint(st);
+}
+
+function xlPrepare(st) {
+  const sh = st.wb.Sheets[st.sheet];
+  let rows = XLSX.utils.sheet_to_json(sh, { header: 1, raw: true, defval: null, blankrows: false });
+  st.truncated = rows.length > XL_MAX_ROWS;
+  if (st.truncated) rows = rows.slice(0, XL_MAX_ROWS);
+  st.hdr = xlHeaderRow(rows);
+  const r = xlColumns(rows, st.hdr);
+  st.cols = r.cols; st.rowCount = r.rowCount;
+  const nums = st.cols.filter(c => c.type === "number"), cats = st.cols.filter(xlGroupable);
+  const dates = st.cols.filter(c => c.type === "date");
+  st.gNum = nums[0] || null; st.gCat = cats[0] || null;
+  st.tNum = nums[0] || null; st.tDate = dates[0] || null;
+  st.keep = new Set();
+}
+
+function xlPaint(st) {
+  const src = "From the spreadsheet " + QL + st.file + QR + (st.wb.SheetNames.length > 1 ? ", sheet " + QL + st.sheet + QR : "");
+  openSheet("Read a spreadsheet", s => {
+    const intro = el("div", "notice");
+    intro.innerHTML = "<span><b>Read on this device.</b> Nothing in this file is sent anywhere. Tick the lines worth keeping and they become facts in <b>" +
+      esc(st.ws.name.trim()) + "</b>. Only those lines are ever used in a simulation.</span>";
+    s.appendChild(intro);
+
+    // Which sheet
+    if (st.wb.SheetNames.length > 1) {
+      const f = el("div", "fld"); f.appendChild(el("label", "", "Sheet"));
+      const row = el("div", "clopts");
+      st.wb.SheetNames.forEach(n => {
+        const b = el("button", "clopt" + (n === st.sheet ? " on" : ""), n);
+        b.onclick = () => { st.sheet = n; xlPrepare(st); xlPaint(st); };
+        row.appendChild(b);
+      });
+      f.appendChild(row); s.appendChild(f);
+    }
+
+    const sum = el("div", "hint");
+    sum.textContent = st.rowCount + (st.rowCount === 1 ? " row" : " rows") + " and " + st.cols.length + (st.cols.length === 1 ? " column" : " columns") +
+      (st.hdr < 0 ? ". No header row was found, so columns are named by letter." : ", headings taken from row " + (st.hdr + 1) + ".") +
+      (st.truncated ? " Only the first " + XL_MAX_ROWS.toLocaleString("en-IN") + " rows were read." : "");
+    s.appendChild(sum);
+
+    if (!st.cols.length) {
+      s.appendChild(el("div", "hint", "This sheet has no data to summarise."));
+      return;
+    }
+
+    const pickLine = (host, text) => {
+      if (!text) return;
+      const b = el("button", "xlline" + (st.keep.has(text) ? " on" : ""));
+      b.appendChild(el("span", "xltick", st.keep.has(text) ? "✓" : ""));
+      b.appendChild(el("span", "", text));
+      b.onclick = () => { if (st.keep.has(text)) st.keep.delete(text); else st.keep.add(text); xlPaint(st); };
+      host.appendChild(b);
+    };
+
+    // Each column, summarised
+    const fc = el("div", "fld"); fc.appendChild(el("label", "", "What each column says"));
+    const lc = el("div", "xllist");
+    st.cols.forEach(c => pickLine(lc, xlColumnLine(src, c)));
+    fc.appendChild(lc); s.appendChild(fc);
+
+    // Breakdown
+    const nums = st.cols.filter(c => c.type === "number");
+    const cats = st.cols.filter(xlGroupable);
+    if (nums.length && cats.length && st.gNum && st.gCat) {
+      const fb = el("div", "fld"); fb.appendChild(el("label", "", "Break it down"));
+      const chips = (list, cur, set) => { const r = el("div", "clopts"); list.forEach(c => { const b = el("button", "clopt" + (c === cur ? " on" : ""), c.name); b.onclick = () => { set(c); xlPaint(st); }; r.appendChild(b); }); return r; };
+      fb.appendChild(chips(nums, st.gNum, c => st.gNum = c));
+      fb.appendChild(el("div", "hint", "by"));
+      fb.appendChild(chips(cats, st.gCat, c => st.gCat = c));
+      const ar = el("div", "clopts");
+      [["avg","Average"],["sum","Total"],["count","Number of rows"]].forEach(([k, lb]) => {
+        const b = el("button", "clopt" + (st.agg === k ? " on" : ""), lb); b.onclick = () => { st.agg = k; xlPaint(st); }; ar.appendChild(b);
+      });
+      fb.appendChild(ar);
+      const groups = xlGroup(st.gNum, st.gCat, st.agg);
+      const pctG = st.gNum.pct && st.agg !== "count";
+      xlBars(fb, groups.slice(0, 8).map(g => ({ k: g.k, v: g.v })), pctG);
+      if (groups.length > 8) fb.appendChild(el("div", "hint", "Showing the top 8 of " + groups.length + "."));
+      const aggWord = st.agg === "avg" ? "Average" : st.agg === "sum" ? "Total" : "Number of rows of";
+      const shown = groups.slice(0, 6);
+      pickLine(fb, src + ": " + aggWord + " " + QL + st.gNum.name + QR + " by " + QL + st.gCat.name + QR + ": " +
+        shown.map(g => g.k + " " + xlFmt(g.v, pctG)).join(", ") +
+        (groups.length > shown.length ? ", and " + (groups.length - shown.length) + " more." : "."));
+      s.appendChild(fb);
+    }
+
+    // Trend
+    const dates = st.cols.filter(c => c.type === "date");
+    if (nums.length && dates.length && st.tNum && st.tDate) {
+      const ft = el("div", "fld"); ft.appendChild(el("label", "", "How it moved over time"));
+      const r1 = el("div", "clopts");
+      nums.forEach(c => { const b = el("button", "clopt" + (c === st.tNum ? " on" : ""), c.name); b.onclick = () => { st.tNum = c; xlPaint(st); }; r1.appendChild(b); });
+      ft.appendChild(r1);
+      if (dates.length > 1) {
+        const r2 = el("div", "clopts");
+        dates.forEach(c => { const b = el("button", "clopt" + (c === st.tDate ? " on" : ""), "by " + c.name); b.onclick = () => { st.tDate = c; xlPaint(st); }; r2.appendChild(b); });
+        ft.appendChild(r2);
+      }
+      const tr = xlTrend(st.tNum, st.tDate);
+      if (tr.length >= 2) {
+        xlBars(ft, tr.slice(-12).map(t => ({ label: t.label, v: t.v })), st.tNum.pct);
+        const a = tr[0], z = tr[tr.length - 1];
+        const ch = a.v ? (z.v - a.v) / Math.abs(a.v) * 100 : 0;
+        pickLine(ft, src + ": Average " + QL + st.tNum.name + QR + " by month of " + QL + st.tDate.name + QR + " went from " +
+          xlFmt(a.v, st.tNum.pct) + " in " + a.full + " to " + xlFmt(z.v, st.tNum.pct) + " in " + z.full +
+          (st.tNum.pct ? ", a move of " + xlFmt(z.v - a.v) + " points" : ", " + (ch >= 0 ? "up " : "down ") + xlFmt(Math.abs(ch)) + " percent") +
+          " across " + tr.length + " months.");
+      } else ft.appendChild(el("div", "hint", "All of these rows fall in one month, so there is no movement to show."));
+      s.appendChild(ft);
+    }
+
+    // Keep
+    const n = st.keep.size;
+    const row = el("div", "btnrow");
+    const go = el("button", "btn pri", n ? "Save " + n + (n === 1 ? " line" : " lines") + " as facts" : "Tick the lines to keep");
+    go.disabled = !n;
+    go.onclick = () => {
+      const w = st.ws; w.facts = w.facts || [];
+      let added = 0;
+      st.keep.forEach(t => { if (!w.facts.some(f => f.text === t)) { w.facts.push({ text: t, at: Date.now(), from: st.file }); added++; } });
+      save(); closeSheet();
+      toast(added ? added + (added === 1 ? " fact" : " facts") + " added to " + w.name : "Those were already saved");
+      openWorkspace(w.id);
+    };
+    row.appendChild(go);
+    const back = el("button", "btn", "Back to the workspace");
+    back.onclick = () => openWorkspace(st.ws.id);
+    row.appendChild(back);
+    s.appendChild(row);
+    s.appendChild(el("div", "hint", "Every figure here was worked out on this device from your file. A saved line is sent with every simulation in this workspace and treated as true, so keep only what you would stand behind."));
+  });
+}
+
+/* ------------------------------------------------------------
    ONBOARDING
 
    Seven screens, and three of them ask for something rather than
@@ -5782,7 +6146,8 @@ function openWorkspace(id) {
     if (ws.facts && ws.facts.length) {
       const f = el("div", "fld");
       f.appendChild(el("label", "", "Confirmed facts (" + ws.facts.length + ")"));
-      f.appendChild(el("div", "hint", "Every one of these is sent with every simulation in this workspace and treated as true. If one is wrong or out of date, remove it, because a wrong fact is worse than a missing one."));
+      f.appendChild(el("div", "hint", "Every one of these is sent with every simulation in this workspace and treated as true. If one is wrong or out of date, remove it, because a wrong fact is worse than a missing one." +
+        (ws.facts.length > FACTS_SENT ? " Only the newest " + FACTS_SENT + " are sent, so the oldest " + (ws.facts.length - FACTS_SENT) + " are not being used. Remove the ones you no longer need." : "")));
       // All of them, newest first, each removable. Showing only the last few meant
       // the user could not see, let alone correct, most of what was being asserted
       // on their behalf.
@@ -5815,6 +6180,19 @@ function openWorkspace(id) {
       }
       s.appendChild(f);
     }
+    // Facts from a spreadsheet. The file is read on the device; see readSpreadsheet.
+    const xf = el("div", "fld");
+    xf.appendChild(el("label", "", "Facts from a spreadsheet"));
+    xf.appendChild(el("div", "hint", "A price list, tender history or sales export. It is read on this device and never sent anywhere. You choose which summary lines to keep as facts."));
+    const xb = el("button", "btn", "Read a spreadsheet");
+    xb.onclick = () => {
+      const inp = el("input"); inp.type = "file"; inp.accept = ".xlsx,.xls,.xlsm,.csv,.ods";
+      inp.onchange = () => { if (inp.files && inp.files[0]) { xb.textContent = "Reading…"; xb.disabled = true; readSpreadsheet(inp.files[0], ws.id).finally(() => { xb.textContent = "Read a spreadsheet"; xb.disabled = false; }); } };
+      inp.click();
+    };
+    const xr = el("div", "btnrow"); xr.appendChild(xb); xf.appendChild(xr);
+    s.appendChild(xf);
+
     const addf = el("div", "fld");
     addf.appendChild(el("label", "", "Add a fact you know is true"));
     const ta2 = el("input"); ta2.placeholder = "e.g. Our lead time is 9 weeks from our works";
@@ -5912,7 +6290,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-10-23-b";
+const BUILD = "2026-10-23-c";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 

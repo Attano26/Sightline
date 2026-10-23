@@ -11,7 +11,7 @@
 
    Bump VERSION on every deploy. That is what tells every installed copy that
    something changed. */
-const VERSION = "sightline-2026-10-23-b";
+const VERSION = "sightline-2026-10-23-c";
 
 const ASSETS = [
   "./",
