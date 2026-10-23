@@ -3202,13 +3202,18 @@ function authHeader(key, mode) {
    jobs. opts.tokens and opts.temp override the defaults. The model that actually
    answered is left in lastModel, so the card can say which one wrote it. */
 let lastModel = "", lastFallback = "";
+/* A model that just refused is rested for two minutes. Without this, every call
+   in one simulation (the card, the check, the repair) walked the whole chain
+   again, and a single card took two minutes on a busy afternoon. */
+const COOL_MS = 120000;
+const modelCool = {};
 async function callGemini(key, sys, user, schema, mode, opts) {
   const o = opts || {};
   const model = o.model || MODEL_FAST;
-  lastFallback = "";
   // A full tier call walks the chain, then the lite model. A lite call is tried once.
   const order = model === MODEL_FAST ? [MODEL_FAST]
-    : [model].concat(MODEL_CHAIN.filter(m => m !== model), [MODEL_FAST]);
+    : [model].concat(MODEL_CHAIN.filter(m => m !== model), [MODEL_FAST])
+        .filter(m => m === MODEL_FAST || !(modelCool[m] > Date.now()));
   let err = null;
   for (const m of order) {
     try {
@@ -3218,6 +3223,7 @@ async function callGemini(key, sys, user, schema, mode, opts) {
       // Throttled, missing or overloaded: try the next model. Anything else, such
       // as a bad key or a truncated answer, is the same on every model, so stop.
       if (!(e.status === 429 || e.status === 404 || e.status >= 500)) throw e;
+      if (m !== MODEL_FAST) modelCool[m] = Date.now() + COOL_MS;
       lastFallback = m + " answered " + e.status + ": " + (e.message || "");
     }
   }
