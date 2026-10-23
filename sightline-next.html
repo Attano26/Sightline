@@ -5375,6 +5375,11 @@ function xlColumnLine(src, col) {
     ". Most common: " + col.top.map(([t, n]) => t + " (" + n + (n === 1 ? " row)" : " rows)")).join(", ") + ".";
 }
 
+/* A column worth grouping by: a handful of values that repeat, such as a city or
+   a developer. A project code on every row groups nothing, and was the first
+   thing offered until this check. */
+const xlGroupable = c => c.type === "text" && c.distinct > 1 && c.distinct <= 30 && c.top.length && c.top[0][1] > 1 && c.distinct < c.filled;
+
 /* A numeric column broken down by a text column. Average by default, because a
    total rewards whichever group simply has more rows. */
 function xlGroup(numCol, catCol, agg) {
@@ -5445,7 +5450,7 @@ function xlPrepare(st) {
   st.hdr = xlHeaderRow(rows);
   const r = xlColumns(rows, st.hdr);
   st.cols = r.cols; st.rowCount = r.rowCount;
-  const nums = st.cols.filter(c => c.type === "number"), cats = st.cols.filter(c => c.type === "text" && c.distinct > 1 && c.distinct <= 60);
+  const nums = st.cols.filter(c => c.type === "number"), cats = st.cols.filter(xlGroupable);
   const dates = st.cols.filter(c => c.type === "date");
   st.gNum = nums[0] || null; st.gCat = cats[0] || null;
   st.tNum = nums[0] || null; st.tDate = dates[0] || null;
@@ -5500,7 +5505,7 @@ function xlPaint(st) {
 
     // Breakdown
     const nums = st.cols.filter(c => c.type === "number");
-    const cats = st.cols.filter(c => c.type === "text" && c.distinct > 1 && c.distinct <= 60);
+    const cats = st.cols.filter(xlGroupable);
     if (nums.length && cats.length && st.gNum && st.gCat) {
       const fb = el("div", "fld"); fb.appendChild(el("label", "", "Break it down"));
       const chips = (list, cur, set) => { const r = el("div", "clopts"); list.forEach(c => { const b = el("button", "clopt" + (c === cur ? " on" : ""), c.name); b.onclick = () => { set(c); xlPaint(st); }; r.appendChild(b); }); return r; };
