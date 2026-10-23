@@ -1169,14 +1169,18 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .odcard .when{font-size:11px;font-weight:600;color:var(--ink-3)}
 .odcard .what{font-size:16px;font-weight:750;letter-spacing:-.028em;margin-top:2px;color:var(--ink)}
 .odcard .note{font-size:11px;color:var(--ink-2);margin-top:3px;line-height:1.35}
-.od1{top:0;transform:scale(.9);opacity:.72}
-.od2{top:92px;transform:scale(.95);opacity:.88}
+/* Earlier stages recede by fading and stepping in, not by scaling, so the spine
+   and the dots on it stay on one line. */
+.od1{top:0;left:14px;right:14px;opacity:.7}
+.od2{top:92px;left:7px;right:7px;opacity:.86}
 .od3{top:184px}
 .od3 .what{color:var(--accent)}
-.odline{position:absolute;left:22px;top:44px;bottom:60px;width:2px;border-radius:2px;
-  background:linear-gradient(180deg,rgba(74,155,255,.25),#2E5BE8);z-index:1}
-.odpip{position:absolute;left:17px;width:12px;height:12px;border-radius:50%;background:var(--surface);
-  box-shadow:0 0 0 2.5px #2E5BE8,0 2px 6px rgba(16,24,64,.2);z-index:2}
+.odline{position:absolute;left:34px;top:36px;bottom:52px;width:2px;border-radius:2px;
+  background:linear-gradient(180deg,rgba(74,155,255,.25),#2E5BE8)}
+.odpip{position:absolute;left:16px;top:50%;margin-top:-6px;width:12px;height:12px;border-radius:50%;background:var(--surface);
+  box-shadow:0 0 0 2.5px #2E5BE8,0 2px 6px rgba(16,24,64,.2)}
+.od1 .odpip{left:15px}.od2 .odpip{left:22px}.od3 .odpip{left:29px}
+.od1{padding-left:38px}.od2{padding-left:45px}.od3{padding-left:52px}
 
 /* 3. The greeting, which fills in as the name is typed. */
 .ohalo{position:absolute;left:12px;top:21px;width:238px;height:238px;border-radius:50%;
@@ -5660,8 +5664,7 @@ function onbArt(kind) {
     [["od1", "Week one", "A margin problem", "You are up eight percent, nobody has moved"],
      ["od2", "A quarter later", "A channel problem", "Two fabricators quietly dual source"],
      ["od3", "A year later", "A specification problem", "Consultants write you out by performance"]].forEach(([c, a, b, n]) =>
-      d.appendChild(card("odcard " + c, [el("div", "when", a), el("div", "what", b), el("div", "note", n)])));
-    [38, 130, 222].forEach(t => { const p = el("div", "odpip"); p.style.top = t + "px"; d.appendChild(p); });
+      d.appendChild(card("odcard " + c, [el("div", "odpip"), el("div", "when", a), el("div", "what", b), el("div", "note", n)])));
     st.appendChild(d);
   } else if (kind === "hello") {
     st.appendChild(el("div", "ohalo"));
@@ -5728,8 +5731,8 @@ function openTour(startAt) {
     const art = el("div", "onbart");
     art.appendChild(onbArt(step.art));
     wrap.appendChild(art);
-    // Fitted once the footer is in and the panel has its real height, then on resize.
-    requestAnimationFrame(() => fitOnbStage(art));
+    // Fitted at the end of paint, once the footer is in and the panel has its real
+    // height, and again whenever the panel changes size.
     if (window.ResizeObserver) { if (onbRO) onbRO.disconnect(); onbRO = new ResizeObserver(() => fitOnbStage(art)); onbRO.observe(art); }
 
     const foot = el("div", "onbfoot");
@@ -5763,6 +5766,7 @@ function openTour(startAt) {
     foot.appendChild(act);
 
     wrap.appendChild(foot);
+    fitOnbStage(art);
   }
 
   function stepName(foot) {
