@@ -3179,10 +3179,14 @@ function confidence(o, ws, an) {
    message is, small talk, and checking a card against the saved facts.
 
    Pro is not an option on a free key. Every Pro id returned 429 with a zero
-   quota when tested on 23 October 2026. If the full model is throttled or
-   missing, the call drops to the lite one rather than failing, and the card
-   says which model wrote it. */
-const MODEL = "gemini-3.5-flash";
+   quota when tested on 23 October 2026.
+
+   The full tier is a short list, tried in order, because on the same afternoon
+   three of the four Flash versions answered 503 "high demand" to a real card
+   while one answered in fifteen seconds. Only when all of them refuse does the
+   call drop to the lite model, and the card then says so. */
+const MODEL_CHAIN = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.7-flash"];
+const MODEL = MODEL_CHAIN[0];
 const MODEL_FAST = "gemini-3.5-flash-lite";
 
 /* Google accepts two different credentials on this endpoint and they need
@@ -3197,20 +3201,27 @@ function authHeader(key, mode) {
 /* opts.model picks the tier, MODEL_FAST by default, because most calls are quick
    jobs. opts.tokens and opts.temp override the defaults. The model that actually
    answered is left in lastModel, so the card can say which one wrote it. */
-let lastModel = "";
+let lastModel = "", lastFallback = "";
 async function callGemini(key, sys, user, schema, mode, opts) {
   const o = opts || {};
   const model = o.model || MODEL_FAST;
-  try {
-    return await callGeminiAuth(key, sys, user, schema, mode, Object.assign({}, o, { model }));
-  } catch (e) {
-    // The full model is throttled, missing or overloaded. A shorter answer from
-    // the lite model beats an error card, and the card says which one it was.
-    if (model !== MODEL_FAST && (e.status === 429 || e.status === 404 || e.status >= 500)) {
-      return await callGeminiAuth(key, sys, user, schema, mode, Object.assign({}, o, { model: MODEL_FAST }));
+  lastFallback = "";
+  // A full tier call walks the chain, then the lite model. A lite call is tried once.
+  const order = model === MODEL_FAST ? [MODEL_FAST]
+    : [model].concat(MODEL_CHAIN.filter(m => m !== model), [MODEL_FAST]);
+  let err = null;
+  for (const m of order) {
+    try {
+      return await callGeminiAuth(key, sys, user, schema, mode, Object.assign({}, o, { model: m }));
+    } catch (e) {
+      err = e;
+      // Throttled, missing or overloaded: try the next model. Anything else, such
+      // as a bad key or a truncated answer, is the same on every model, so stop.
+      if (!(e.status === 429 || e.status === 404 || e.status >= 500)) throw e;
+      lastFallback = m + " answered " + e.status + ": " + (e.message || "");
     }
-    throw e;
   }
+  throw err;
 }
 
 async function callGeminiAuth(key, sys, user, schema, mode, o) {
@@ -3586,7 +3597,7 @@ async function revealCard(host, data, an, conf, mode, fast) {
   // lighter one and the answer is noticeably thinner when it does.
   if (data.model_used) {
     const lite = data.model_used === MODEL_FAST;
-    ft.appendChild(el("span", "fmodel", lite ? "Written by the lighter model, because the full one was busy" : "Written by " + data.model_used));
+    ft.appendChild(el("span", "fmodel", lite ? "Written by the lighter model, because every full model was busy. Run it again later for a fuller answer." : "Written by " + data.model_used));
   }
   card.appendChild(ft);
 }
