@@ -421,7 +421,8 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .nextq .nq{font-size:15px;line-height:1.4;letter-spacing:-.014em}
 .nextq .nl{font-size:12.5px;font-weight:600;color:var(--accent-ink)}
 
-.cfoot{display:flex;gap:8px;padding:0 22px 20px;flex-wrap:wrap}
+.cfoot{display:flex;gap:8px;padding:0 22px 20px;flex-wrap:wrap;align-items:center}
+.fmodel{font-size:12.5px;color:var(--ink-3);flex-basis:100%}
 .fbtn{
   padding:8px 16px;border-radius:var(--r-pill);border:1px solid var(--line);
   font-size:13.5px;font-weight:600;color:var(--ink-2);transition:background .15s,color .15s;
@@ -603,6 +604,7 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
   padding:18px 20px;display:flex;flex-direction:column;gap:14px;
 }
 .smalltxt{font-size:15.5px;line-height:1.55;letter-spacing:-.011em}
+.smallfail{font-size:13px;line-height:1.45;color:var(--ink-3);margin-top:8px}
 .smallsug{display:flex;flex-direction:column;gap:8px}
 /* Left aligned, and roomy. These hold whole sentences, and pill styling built
    for one or two words centred them and squeezed them. */
@@ -1561,7 +1563,12 @@ const SLOTS = {
   },
   priceBasis: {
     q: "Your price is a price of what?",
-    detect: has(/per m|per square|per sq|installed|ex.?works|per opening|per project|per tonne|per kg/i),
+    // Asked only when neither the question nor the saved anchor says. An anchor
+    // reading "per square metre, system price" already answers it, every time.
+    detect: (t, ws) => {
+      const re = /per m|per square|per sq|installed|fitted|ex.?works|system price|per opening|per project|per tonne|per kg/i;
+      return re.test(t) || re.test((ws && ws.ctx && ws.ctx.anchor) || "");
+    },
     options: () => [
       opt("The system only, per square metre", "Our price is an ex works system price, per square metre.", false,
           "Profiles and hardware, collected from us. The buyer pays freight and duty from there, and nobody has fabricated, glazed or fitted it yet. The trade term for this is <i>ex works</i>."),
@@ -1577,7 +1584,9 @@ const SLOTS = {
   },
   ourMove: {
     q: "What are you doing that they would react to?",
-    detect: has(/launch|price|enter|win|bid|introduc|announc|expand|acquir|partner/i),
+    // Also answered when the rival is the one moving: "Jindal will undercut us"
+    // already says who moved first, so asking what we did is a wasted question.
+    detect: has(/launch|price|enter|win|bid|introduc|announc|expand|acquir|partner|undercut|is offering|has opened|opened|offering|moved first|copied|copying/i),
     options: () => [
       opt("A price change", "Our move: a price change."),
       opt("A new system launch", "Our move: launching a new system."),
@@ -1948,6 +1957,10 @@ const FACT_ASKS = [
 
 function answerability(text) {
   if (HYPOTHETICAL.test(text)) return null;
+  // Their own figures about their own business are not a question about the
+  // outside world. "Our margins dropped from 18 to 11 percent this year, what is
+  // driving it?" was blocked as needing web search.
+  if (/\b(our|we|us)\b/i.test(text) && /\d/.test(text)) return null;
   for (const f of FACT_ASKS) if (f.re.test(text)) return f.why;
   return null;
 }
@@ -2004,7 +2017,11 @@ const DOMAIN = new RegExp(WB + "(" + [
   "stock","inventory","supply ?chain","logistic","freight","shipment","supply",
   "enter","entry","expand","expansion","region","geography","launch",
   "revenue","turnover","growth","forecast","target","strategy","positioning","brand",
-  "customer","customers","buyer","buyers","account","project","projects","tower","residential","commercial"
+  "customer","customers","buyer","buyers","account","project","projects","tower","residential","commercial",
+  // Added after "How do we win more work in Bengaluru?" and "Should we relax payment
+  // terms for fabricators?" were both answered as small talk.
+  "win","won","winning","sales","sell","selling","deal","deals","order","orders","profit","credit","payment",
+  "terms","pipeline","lead","leads","enquiry","enquiries","villa","villas","slider","sliding","casement","upvc"
 // A trailing suffix group, so the list can hold stems rather than every
 // inflection of every word. "price" then covers prices and priced, "fabricate"
 // covers fabrication. Without it "raise prices in India" read as small talk.
@@ -2036,6 +2053,8 @@ const PERSONAL = /\b(dangerous|toxic|bully|bullying|bullied|harass\w*|abusive|th
    title is not a subject. Checked before the domain test for that reason. */
 const META = new RegExp(WB + "(help me|can you help|how (do|can) i (get|be|become|improve|learn)|i want to (be|become|learn|improve|get better)|teach me|coach me|train me|make me|my career|better (product|project|account|sales) manager|better at my job|what should i (learn|read|do)|how do i improve|advice for me|guide me|mentor)" + WB, "i");
 
+const CAREER = new RegExp(WB + "(my career|better (product|project|account|sales) manager|better at my job|i want to (be|become) a|teach me|coach me|mentor me|how do i improve|advice for me)" + WB, "i");
+
 const REFERENTIAL = /\b(it|that|this|they|them|those|these|your|you|above|card|answer|read|point|number|figure|round|stage|cascade|assumption|claim|verdict|risk|actor)\b/i;
 
 function looksBusiness(text, ws) {
@@ -2050,16 +2069,29 @@ function looksBusiness(text, ws) {
 }
 
 /* Returns a reason when there is nothing to simulate, or null to proceed. */
+/* This is the fallback router, used without a key or when the model router fails.
+   With a key, routeMessage decides.
+
+   Business content now wins over the word lists. "We are afraid Jindal will
+   undercut us" was answered with sympathy because "afraid" is on the personal
+   list, "Help me price our new sliding system" was told this is not a coach, and
+   "relax payment terms" hit "relax" on the off topic list. One stray word should
+   never outvote a competitor, a price and a deadline. */
 function noSubstance(text, ws) {
   const t = (text || "").trim();
   if (!t) return "There is nothing here to simulate.";
-  if (OFF_TOPIC.test(t)) return "off topic";
+  const biz = ws ? looksBusiness(t, ws) : false;
+  if (OFF_TOPIC.test(t) && !biz) return "off topic";
   const words = t.toLowerCase().replace(/[^a-z0-9%₹$ ]+/g, " ").split(/\s+/).filter(Boolean);
   if (!words.length) return "There is nothing here to simulate.";
   if (words.every(w => FILLER.has(w))) return "That is a greeting, not a decision.";
+  // A career question still beats business words, because "a better product
+  // manager" contains "product" and once ran a full launch simulation.
+  if (CAREER.test(t)) return "meta";
+  if (biz) return null;
   if (PERSONAL.test(t)) return "personal";
   if (META.test(t)) return "meta";
-  if (ws && !looksBusiness(t, ws)) return "no decision";
+  if (ws) return "no decision";
   return null;
 }
 
@@ -2079,7 +2111,8 @@ function findGaps(text, mode, ws) {
     let covered = false;
     try { covered = sl.detect(text, ws); } catch (e) { covered = false; }
     if (!covered) out.push({ id, slot: sl });
-    if (out.length === 3) break;
+    // Two at most. Three questions before an answer felt like a form.
+    if (out.length === 2) break;
   }
   return out;
 }
@@ -2185,11 +2218,11 @@ const HORIZON_ENUM = ["WEEKS","ONE_QUARTER","TWO_QUARTERS","ONE_YEAR","BEYOND_A_
 const SHAPES = {
   ladder: {
     title: "What happens at each price",
-    prompt: "Give three price positions relative to the user's own anchor: clearly below it, at it, and clearly above it. Never state an absolute currency amount. Describe each move as a relative shift, for example \"about a tenth under your anchor\". For each, say what actually happens and who walks away.",
+    prompt: "Give three price positions relative to the user's own anchor: clearly below it, at it, and clearly above it. Never state an absolute currency amount unless it is one of the WORKED FIGURES. Describe each move as a relative shift, for example \"about a tenth under your anchor\", adding the worked figure where one exists. For each, say what actually happens and who walks away.",
     schema: { type:"object", properties:{
       rungs:{ type:"array", minItems:3, maxItems:3, items:{ type:"object", properties:{
         position:{ type:"string", enum:["BELOW","AT","ABOVE"] },
-        move:{ type:"string", description:"The price position stated relative to their anchor, never an absolute figure. MAX 8 WORDS." },
+        move:{ type:"string", description:"The price position stated relative to their anchor, plus the worked figure if one was given. MAX 12 WORDS." },
         what_happens:{ type:"string", description:"What this price actually causes. MAX 16 WORDS." },
         who_walks:{ type:"string", description:"Who you lose at this level, named where possible. MAX 10 WORDS." }
       }, required:["position","move","what_happens","who_walks"], propertyOrdering:["position","move","what_happens","who_walks"] } },
@@ -2271,7 +2304,7 @@ let S = null;
 /* Five groups, not one list. A flat roster meant "which competitor?" could offer
    a glass supplier or a developer, because nothing recorded what each name was. */
 const SEED_GROUPS = {
-  rivals: "Reynaers Aluminium, Technal, WICONA, Aluk, Alumil, Kawneer, Jansen, Hydro Building Systems, Fenesta Building Systems, Jindal Aluminium, Hindalco Eternia, Alufit India, Glass Wall Systems (GWS), Innovators Facade Systems, Encraft, Aluplast India",
+  rivals: "Reynaers Aluminium, Technal, WICONA, Aluk, Alumil, Kawneer, Jansen, Hydro Building Systems, Fenesta Building Systems, Jindal Aluminium, Hindalco Eternia, Glass Wall Systems (GWS), Innovators Facade Systems, Encraft, Aluplast India",
   channel: "Licensed fabricators, Regional dealers, Facade contractors, Installers",
   customers: "Lodha (Macrotech), DLF, Prestige Estates, Godrej Properties, Embassy Group, Brigade Group, Oberoi Realty, Sobha, Hiranandani",
   suppliers: "Hindalco Industries, NALCO, Balco, Saint-Gobain India, Asahi India Glass (AIS), Gold Plus Glass, Guardian Glass, Sisecam",
@@ -2289,7 +2322,8 @@ const SEED_FACTS = [
   "Chinese float glass capacity exceeds one billion square metres a year against weak domestic property demand, so Chinese processed glass and insulated units are being pushed into export markets at aggressive prices. That makes a competing facade package cheaper, not just the profile.",
   "The India facade market is reported at roughly USD 3.06bn in 2024, heading toward USD 5.58bn by 2033, about 6.9 percent compound growth. Aluminium doors and windows are reported near 7.8 percent compound growth for 2026 to 2032. Treat these as directional third party estimates, not internal figures.",
   "Curtain wall holds the largest share of the Indian facade market, concentrated in high-rise commercial and premium residential.",
-  "Independent fabricators own their dies and tooling and can run two systems at once. They are the actor most often left out of analysis and usually the one that decides the outcome."
+  "Independent fabricators own their dies and tooling and can run two systems at once. They are the actor most often left out of analysis and usually the one that decides the outcome.",
+  "Alufit India operates under the Schüco brand. It is part of the same family, not a competitor."
 ];
 
 function seedWorkspace(id) {
@@ -2549,8 +2583,92 @@ function contextPack(ws) {
   return lines.length ? lines.join("\n") : "(The user has not filled in a context pack. Say so in evidence gaps.)";
 }
 
-function systemPrompt(mode, ws) {
+/* ------------------------------------------------------------
+   WORKED FIGURES
+
+   Language models are unreliable at arithmetic, and a card that says
+   "margin pressure" when the person gave it twelve percent and an
+   anchor of eighteen thousand rupees has skipped the one sum they
+   actually wanted. So the sum is done here, in code, from their own
+   numbers, and handed to the model to quote. Nothing in it is
+   invented: every figure is the anchor times a percentage the
+   person typed.
+   ------------------------------------------------------------ */
+const NUMWORDS = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10, eleven:11, twelve:12,
+  fifteen:15, twenty:20, thirty:30, forty:40, fifty:50 };
+
+function anchorAmount(ws) {
+  const a = String((ws.ctx && ws.ctx.anchor) || "");
+  const m = a.match(/(₹|rs\.?\s|inr\s|€|eur\s|\$|usd\s)?\s*(\d[\d,]*(?:\.\d+)?)\s*(lakh|crore|k\b)?\s*(rupees?|inr|euros?|eur|dollars?|usd)?/i);
+  if (!m) return null;
+  let n = parseFloat(m[2].replace(/,/g, ""));
+  if (!isFinite(n) || n <= 0) return null;
+  const mult = (m[3] || "").toLowerCase();
+  if (mult === "lakh") n *= 1e5; else if (mult === "crore") n *= 1e7; else if (mult === "k") n *= 1e3;
+  const cur = ((m[1] || "") + " " + (m[4] || "")).toLowerCase();
+  const sym = /€|eur/.test(cur) ? "€" : /\$|usd|dollar/.test(cur) ? "$" : "₹";
+  return { n, sym, text: a };
+}
+
+function moneyText(n, sym) {
+  const r = Math.round(n);
+  return sym + r.toLocaleString(sym === "₹" ? "en-IN" : "en-GB");
+}
+
+function workedFigures(text, ws) {
+  const out = { lines: [], amounts: [] };
+  const an = anchorAmount(ws);
+  if (!an) return out;
+  /* Only for a percentage that moves a price. "LME jumps 15 percent" is a move in
+     the metal, which is only part of a system price, and handing the model
+     "15 percent of your anchor is 1,800" led it to raise the whole system price
+     by 15 percent. An input cost question gets no worked figures. */
+  const PRICEY = /price|pric(ed|ing)|discount|rebate|undercut|below|above|under us|cheaper|quote|rate|cut|raise|increase our|reduce our/i;
+  const INPUT = /\b(lme|alumin\w*|billet|metal|glass|energy|power|freight|steel|hardware cost|input|raw material)\b/i;
+  if (INPUT.test(text) && !PRICEY.test(String(text).replace(INPUT, ""))) return out;
+  const pcts = [];
+  const t = String(text || "");
+  /* A percentage that describes a margin, a share or a growth rate is not a price
+     move. "Margins dropped from 18 to 11 percent" once became "your price drops
+     1,320 rupees", which is 11 percent of the anchor and means nothing. */
+  const NOT_PRICE = /margin|share|growth|volume|demand|utili[sz]|occupancy|interest|inflation|gst|duty|tax/i;
+  const near = i => t.slice(Math.max(0, i - 40), i);
+  t.replace(/(\d+(?:\.\d+)?)\s*(%|percent|per cent)/gi, (m, n, _u, i) => { if (!NOT_PRICE.test(near(i))) pcts.push(parseFloat(n)); return m; });
+  Object.keys(NUMWORDS).forEach(w => {
+    const m = new RegExp(WB + w + "\\s+(percent|per cent)", "i").exec(t);
+    if (m && !NOT_PRICE.test(near(m.index))) pcts.push(NUMWORDS[w]);
+  });
+  [...new Set(pcts)].filter(p => p > 0 && p < 100).slice(0, 3).forEach(p => {
+    const d = an.n * p / 100;
+    out.lines.push(p + " percent of your anchor is " + moneyText(d, an.sym) + ". Down by that much the anchor becomes " +
+      moneyText(an.n - d, an.sym) + ", up by that much it becomes " + moneyText(an.n + d, an.sym) + ".");
+    out.amounts.push(Math.round(d), Math.round(an.n - d), Math.round(an.n + d));
+  });
+  if (out.lines.length) out.lines.unshift("Anchor: " + moneyText(an.n, an.sym) + ", which is " + an.text + ".");
+  return out;
+}
+
+/* What kind of answer the person wants. A reaction question gets the cascade as
+   it always has. Somebody asking for help pricing something wants a
+   recommendation, and somebody asking why their margins fell wants candidate
+   causes they can check, not one cause asserted as fact. */
+const ASK_FRAMES = {
+  REACTION: "",
+  ADVICE: `WHAT THEY WANT: A RECOMMENDATION. They asked you to help them decide, so decide. The headline
+is the recommendation itself, written as an instruction with a verb, for example "Price the
+sliding system about five percent above your anchor and hold it". The stages show what happens
+if they follow it, and flips_if says what would make it the wrong call.`,
+  DIAGNOSIS: `WHAT THEY WANT: A DIAGNOSIS. They asked why something is happening in their own business.
+You cannot know the cause, so never state one as fact. The headline names the most likely cause
+AS A HYPOTHESIS, beginning "Most likely cause:". Put the other plausible causes in assumptions,
+each with how they would tell it apart, and the checks in evidence_gaps. The stages show what
+happens if the most likely cause continues and nothing is done.`
+};
+
+function systemPrompt(mode, ws, extra) {
   const m = modeById(mode);
+  const x = extra || {};
+  const wf = workedFigures(x.text || "", ws);
   return `You simulate competitive reaction in the FACADE AND FENESTRATION industry: aluminium
 window and curtain-wall systems, glass, and the building envelope. This is a physical,
 specification-led, project-based B2B business. It is NOT software and NOT consumer goods.
@@ -2565,6 +2683,9 @@ HOW THIS INDUSTRY ACTUALLY WORKS. Reason with these, they are not decoration:
   systems at once. It is the actor most people forget, and usually the actor that decides.
 • Metal is priced globally on the LME. Nobody has cheaper aluminium. Undercutting comes from
   conversion cost, scale and thinner margin, never from cheaper metal.
+• Metal is only part of a system price, alongside conversion, hardware, engineering and margin. A
+  rise of some percentage in the metal is a much smaller rise in the system price, never the same
+  percentage. If you do not know the metal share, say so and list it in evidence_gaps.
 • Codes and standards (BIS, CBAM, fire, thermal) cut both ways: they block imports AND bind you.
 
 MODE: ${m.name}. ${m.desc}
@@ -2576,7 +2697,8 @@ artefact a product manager expects for this kind of decision.
 
 WHAT YOU KNOW ABOUT THIS USER:
 ${contextPack(ws)}
-
+${wf.lines.length ? NL + "WORKED FIGURES. Calculated in code from the user's own anchor and the percentages they typed. They are exact. Quote them where they answer the question, mark them RELATIVE_TO_ANCHOR in numbers_used, and use them only where the percentage really is a price move:" + NL + wf.lines.map(l => "  • " + l).join(NL) + NL : ""}
+${ASK_FRAMES[x.ask] ? ASK_FRAMES[x.ask] + NL : ""}
 HOW YOU MUST THINK:
 1. ANSWER FIRST. The headline is a claim with a verb, under 12 words. No preamble.
 2. THE SUBSTITUTION TEST. This is the rule that matters most. A claim that stays true if you swap
@@ -2595,8 +2717,9 @@ HOW YOU MUST THINK:
    spec", never "what happened in round 1".
 4. NEVER INVENT ABSOLUTE NUMBERS. You may not state a market size, share, growth rate, or any price
    that the user did not give you. Express every quantity as a RELATIVE move against the user's own
-   anchor: "roughly a quarter below your anchor", "you transact around 15% under list". If there is
-   no anchor, write "needs your price anchor" and add it to evidence_gaps.
+   anchor: "roughly a quarter below your anchor", "you transact around 15% under list". The one
+   exception is WORKED FIGURES above, which come from their own anchor and may be quoted exactly.
+   If there is no anchor, write "needs your price anchor" and add it to evidence_gaps.
 5. EVERY NUMBER DECLARES ITS REFERENT. For anything numeric, fill numbers_used with what it is a
    price OF, for example "ex-works system per square metre", "installed window per square metre",
    "per opening", or "annual contract".
@@ -2613,11 +2736,30 @@ HOW YOU MUST THINK:
    reference projects, a new entrant cannot win a marquee job in round one. If the channel carries
    the credit, a cost increase lands on the fabricator before it lands on you. Getting this wrong
    makes the whole simulation wrong, however well written it is.
-9. Be specific and short. Every field has a word budget. Write like a briefing note, not an essay.
-   No hedging phrases, no "it depends", no restating the question.
+9. Be specific. Every field has a word budget. Write like a briefing note, not an essay. Say the
+   concrete thing: who, what, roughly how much, by when. No hedging phrases, no "it depends", no
+   restating the question, and no stage whose only content is "margins come under pressure".
 10. PUNCTUATION. Write plain sentences. Never use a dash of any kind as punctuation, and never use
    a slash between words. Use full stops, commas, and the words "and" or "or" instead. Write units
-   out in words: "per square metre", "per tonne", not symbols joined by a slash.`;
+   out in words: "per square metre", "per tonne", not symbols joined by a slash.
+11. SAVED FACTS ARE BINDING. The user's facts and the industry rules above outrank anything you
+   believe in general. Before you answer, check every stage against every fact. A stage that
+   contradicts one is wrong, so rewrite it. If a fact says nobody has cheaper metal, no actor may
+   switch suppliers to get cheaper metal. If the product description says they already sell
+   something, never say they must start selling it.
+12. THREAT OR OPPORTUNITY. Decide from THIS company's own products and position whether the event
+   mainly hurts it or mainly helps it, and fill stance and stance_why. A rule that makes mandatory
+   something they already sell is mainly an opportunity. Never default to threat.
+13. NO INVENTED PREMISES. If your read depends on something the user did not say and the context does
+   not state, for example that a rival cut specification to win, never write it as fact. Write it
+   as a condition and list it in assumptions. Assumptions said openly are fine. Hidden ones are not.
+14. ANSWER THE QUESTION THEY ASKED. If they asked whether, how much, which, or what happens to
+   something, the headline answers exactly that, with a direction and a rough size against their
+   anchor or their own figures. A general point about the market is not an answer.
+15. EVERY ACTOR YOU CAST MUST DO SOMETHING. Each name in actors appears in a stage or in the
+   mode_block. If it does neither, leave it out.
+16. NAMES IN THE CONTEXT ARE GROUPED ON PURPOSE. Never cast a customer, supplier or a business under
+   the user's own brand as a competitor.`;
 }
 
 const HORIZONS = ["WEEKS","ONE_QUARTER","TWO_QUARTERS","ONE_YEAR","BEYOND_A_YEAR"];
@@ -2648,9 +2790,14 @@ RULES, IN ORDER OF IMPORTANCE:
 6. Put every name in the RIGHT group. "rivals" is competing system houses and brands only, never a
    supplier and never a customer. "channel" is who converts and quotes. "customers" is who buys at
    scale. "suppliers" is metal, glass and hardware. "bodies" is standards and certification. Putting
-   a glass maker in "rivals" makes the tool ask the user the wrong question later.
+   a glass maker in "rivals" makes the tool ask the user the wrong question later. Architects, facade
+   consultants and engineering teams SPECIFY, so they belong in "audience" and never in "channel".
+   A business owned by or trading under the same group or brand is never a rival.
 7. PUNCTUATION. Write plain sentences. Never use a dash of any kind as punctuation, and never put a
-   slash between words. Use full stops, commas, and the words "and" or "or".`;
+   slash between words. Use full stops, commas, and the words "and" or "or".
+8. Put every name you are not certain of, whether it exists or which group it belongs in, into
+   "unsure_names". Be generous with this list. The user checks it, and an invented name they trust
+   never gets checked.`;
 
 const DRAFT_SCHEMA = {
   type:"object",
@@ -2660,14 +2807,15 @@ const DRAFT_SCHEMA = {
     market:{ type:"string", description:"Countries, segments and main cities where they operate. One sentence." },
     audience:{ type:"string", description:"Who specifies, who buys, who converts, who sets the rules. One or two sentences." },
     rivals:{ type:"array", maxItems:14, items:{ type:"string", description:"A real competing system house or brand" } },
-    channel:{ type:"array", maxItems:6, items:{ type:"string", description:"A real channel type or named partner" } },
+    channel:{ type:"array", maxItems:6, items:{ type:"string", description:"Who converts, quotes or installs their product: fabricators, dealers, installers, or a named partner. Never architects or consultants." } },
     customers:{ type:"array", maxItems:10, items:{ type:"string", description:"A real developer or contractor that buys at scale" } },
     suppliers:{ type:"array", maxItems:8, items:{ type:"string", description:"A real aluminium, glass or hardware supplier" } },
     bodies:{ type:"array", maxItems:6, items:{ type:"string", description:"A real standards or certification body" } },
-    uncertain:{ type:"array", maxItems:4, items:{ type:"string", description:"Something you are not confident about and the user should check. Max 12 words." } }
+    uncertain:{ type:"array", maxItems:4, items:{ type:"string", description:"Something you are not confident about and the user should check. Max 12 words." } },
+    unsure_names:{ type:"array", maxItems:12, items:{ type:"string", description:"A name from your lists you are not certain exists, or not certain is in the right group." } }
   },
-  required:["company","product","market","audience","rivals","channel","customers","suppliers","bodies","uncertain"],
-  propertyOrdering:["company","product","market","audience","rivals","channel","customers","suppliers","bodies","uncertain"]
+  required:["company","product","market","audience","rivals","channel","customers","suppliers","bodies","uncertain","unsure_names"],
+  propertyOrdering:["company","product","market","audience","rivals","channel","customers","suppliers","bodies","uncertain","unsure_names"]
 };
 
 function buildSchema(mode) {
@@ -2677,36 +2825,39 @@ function buildSchema(mode) {
     type:"object",
     properties:{
       call:{ type:"string", enum:["HOLDS","HOLDS_WITH_CHANGES","BREAKS","MALFORMED_PREMISE"] },
-      headline:{ type:"string", description:"The answer as a claim with a verb. MAX 12 WORDS. No colon." },
-      only_true_here:{ type:"string", description:"The part of this read that would be FALSE for a different company in this same market. MAX 14 WORDS." },
-      flips_if:{ type:"string", description:"The most plausible way this whole read is wrong. MAX 16 WORDS." },
-      behaviour_used:{ type:"string", description:"Name the ONE local buying practice from the pack that most shaped this read, and say how it changed the answer. If the pack described none, write exactly: none given. MAX 18 WORDS." },
+      headline:{ type:"string", description:"The direct answer to what they asked, as a claim with a verb. MAX 16 WORDS. No colon, except after Most likely cause." },
+      stance:{ type:"string", enum:["MAINLY_A_THREAT","MAINLY_AN_OPPORTUNITY","BOTH"] },
+      stance_why:{ type:"string", description:"Why, given this company's own products and position. MAX 20 WORDS." },
+      only_true_here:{ type:"string", description:"The part of this read that would be FALSE for a different company in this same market. MAX 20 WORDS." },
+      flips_if:{ type:"string", description:"The most plausible way this whole read is wrong. MAX 22 WORDS." },
+      behaviour_used:{ type:"string", description:"Name the ONE local buying practice from the pack that most shaped this read, and say how it changed the answer. If the pack described none, write exactly: none given. MAX 24 WORDS." },
+      assumptions:{ type:"array", maxItems:3, items:{ type:"string", description:"Something this read depends on that the user did not say and the context does not state, written as a condition. MAX 18 WORDS." } },
       next_questions:{ type:"array", minItems:3, maxItems:3, items:{ type:"object", properties:{
-        q:{ type:"string", description:"A question worth simulating next. MAX 14 WORDS." },
+        q:{ type:"string", description:"A question worth simulating next. MAX 18 WORDS." },
         lane:{ type:"string", enum:["TEST_THE_WEAK_LINK","CHANGE_ONE_VARIABLE","WIDEN_THE_CAST"] }
       }, required:["q","lane"], propertyOrdering:["q","lane"] } },
       actors:{ type:"array", minItems:3, maxItems:4, items:{ type:"object", properties:{
         name:{ type:"string", description:"MAX 5 WORDS" },
         kind:{ type:"string", enum:["RIVAL","CHANNEL","SPECIFIER","BUYER","REGULATOR","SUPPLIER","INTERNAL"] },
         basis:{ type:"string", enum:["USER_NAMED","ROSTER","ARCHETYPE"] },
-        wants:{ type:"string", description:"MAX 10 WORDS" },
-        lever:{ type:"string", description:"What they can actually do to you. MAX 10 WORDS" }
+        wants:{ type:"string", description:"MAX 14 WORDS" },
+        lever:{ type:"string", description:"What they can actually do to you. MAX 14 WORDS" }
       }, required:["name","kind","basis","wants","lever"], propertyOrdering:["name","kind","basis","wants","lever"] } },
       rounds:{ type:"array", minItems:3, maxItems:3, items:{ type:"object", properties:{
         round:{ type:"integer" },
         horizon:{ type:"string", enum:HORIZONS },
         actor:{ type:"string", description:"MAX 5 WORDS. Must match an actor name." },
-        triggered_by:{ type:"string", description:"The specific thing in the PREVIOUS stage that caused this. Empty for the first stage. Write it as a plain cause, never as a step number. MAX 12 WORDS." },
-        move:{ type:"string", description:"What this actor does. MAX 18 WORDS." },
-        net_effect:{ type:"string", description:"The consequence for us, written so it reads naturally after the words \"For you:\". MAX 14 WORDS." },
+        triggered_by:{ type:"string", description:"The specific thing in the PREVIOUS stage that caused this. Empty for the first stage. Write it as a plain cause, never as a step number. MAX 16 WORDS." },
+        move:{ type:"string", description:"What this actor does, concretely. MAX 26 WORDS." },
+        net_effect:{ type:"string", description:"The consequence for us, with a direction and rough size where possible, written so it reads naturally after the words \"For you:\". MAX 20 WORDS." },
         risk:{ type:"object", properties:{
-          text:{ type:"string", description:"The risk this round creates. MAX 14 WORDS." },
+          text:{ type:"string", description:"The risk this round creates. MAX 20 WORDS." },
           severity:{ type:"string", enum:["MEDIUM","HIGH"] },
-          signal:{ type:"string", description:"The observable early warning. MAX 12 WORDS." }
+          signal:{ type:"string", description:"The observable early warning, something a person could actually see or hear. MAX 16 WORDS." }
         }, required:["text","severity","signal"], propertyOrdering:["text","severity","signal"] }
       }, required:["round","horizon","actor","triggered_by","move","net_effect","risk"],
          propertyOrdering:["round","horizon","actor","triggered_by","move","net_effect","risk"] } },
-      mechanism_new_in_r3:{ type:"string", description:"The mechanism at work by the final stage that did not exist at the first. MAX 14 WORDS." },
+      mechanism_new_in_r3:{ type:"string", description:"The mechanism at work by the final stage that did not exist at the first. MAX 20 WORDS." },
       mode_block: sh.schema,
       numbers_used:{ type:"array", maxItems:6, items:{ type:"object", properties:{
         value:{ type:"string", description:"The quantity as written" },
@@ -2714,15 +2865,15 @@ function buildSchema(mode) {
         source:{ type:"string", enum:["USER_PROVIDED","RELATIVE_TO_ANCHOR","MY_ESTIMATE"] }
       }, required:["value","applies_to","source"], propertyOrdering:["value","applies_to","source"] } },
       evidence_gaps:{ type:"array", minItems:1, maxItems:3, items:{ type:"object", properties:{
-        unknown:{ type:"string", description:"MAX 10 WORDS" },
-        why:{ type:"string", description:"Why it changes the read. MAX 12 WORDS" },
+        unknown:{ type:"string", description:"MAX 14 WORDS" },
+        why:{ type:"string", description:"Why it changes the read. MAX 18 WORDS" },
         how:{ type:"string", enum:["ASK_A_FABRICATOR","ASK_AN_ARCHITECT","CHECK_A_TENDER","CHECK_PUBLISHED_DATA","ASK_SALES","INTERNAL_RECORD"] }
       }, required:["unknown","why","how"], propertyOrdering:["unknown","why","how"] } }
     },
-    required:["call","headline","only_true_here","flips_if","behaviour_used","next_questions","actors","rounds","mechanism_new_in_r3","mode_block","numbers_used","evidence_gaps"],
+    required:["call","headline","stance","stance_why","only_true_here","flips_if","behaviour_used","assumptions","next_questions","actors","rounds","mechanism_new_in_r3","mode_block","numbers_used","evidence_gaps"],
     // Ordering is also truncation order. The follow-up chips sit high on purpose:
     // they are the retention mechanism and must never be the thing that gets cut.
-    propertyOrdering:["call","headline","only_true_here","flips_if","behaviour_used","next_questions","actors","rounds","mechanism_new_in_r3","mode_block","numbers_used","evidence_gaps"]
+    propertyOrdering:["call","headline","stance","stance_why","only_true_here","flips_if","behaviour_used","assumptions","next_questions","actors","rounds","mechanism_new_in_r3","mode_block","numbers_used","evidence_gaps"]
   };
 }
 
@@ -2736,7 +2887,7 @@ const STOP = new Set("the a an and or but of to in on at for with from by is are
 const stem = w => w.replace(/(ies)$/, "y").replace(/(sses|shes|ches|xes)$/, m => m.slice(0, -2)).replace(/([^s])s$/, "$1");
 const toks = s => String(s || "").toLowerCase().split(/[^a-z0-9₹$€£%]+/).filter(w => w.length > 2 && !STOP.has(w)).map(stem);
 
-function analyse(o, ws) {
+function analyse(o, ws, text) {
   const out = { specificity:0, specificityTotal:0, generic:false, flatCascade:false, r3Flat:false, archetypes:0, estimates:0, unitClash:null };
 
   // (1) SUBSTITUTION TEST — does the card reference THIS user's world, or could it
@@ -2799,27 +2950,165 @@ function analyse(o, ws) {
   // Rule 10 tells the model to write units out, so a figure often arrives as
   // "about eight percent" with no digit in it at all. Matching only numerals meant
   // this check almost never fired.
-  const NUMWORD = /\d|percent|per cent|[₹$€£]|\b(one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|half|double|triple|quarter)\b/i;
-  const cur = (o.numbers_used || []).filter(n => NUMWORD.test(n.value || ""));
+  /* Only prices can clash. A floor area or a percentage next to a price is not a
+     comparison, and flagging "1,000 square metres of floor area against 12,000
+     rupees per square metre" taught people to ignore the warning. */
+  const NUMWORD = /\d|[₹$€£]|\b(one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|hundred|thousand|lakh|crore)\b/i;
+  const MONEY = /[₹$€£]|rupee|\binr\b|euro|dollar|\busd\b|lakh|crore/i;
+  const cur = (o.numbers_used || []).filter(n => NUMWORD.test(n.value || "") && !/percent|per cent|%/i.test(n.value || "") &&
+    (MONEY.test(n.value || "") || /\bprice\b/i.test(n.applies_to || "")));
   const refs = [...new Set(cur.map(n => (n.applies_to || "").toLowerCase().trim()))].filter(Boolean);
   if (cur.length >= 2 && refs.length >= 2) out.unitClash = refs;
+
+  // (5) every actor cast should do something. A regulator listed and never used
+  // is decoration, and it made a card look more thorough than it was.
+  const used = toks((o.rounds || []).map(r => (r.actor || "") + " " + (r.move || "") + " " + (r.triggered_by || "")).join(" ") +
+    " " + JSON.stringify(o.mode_block || {}));
+  const usedSet = new Set(used);
+  out.actorsIdle = (o.actors || []).filter(a => !toks(a.name).some(t => usedSet.has(t))).map(a => a.name);
+
+  // (6) were the worked figures used? Only judged when there were some.
+  const wf = workedFigures(text || "", ws);
+  out.figuresAvailable = wf.amounts.length > 0;
+  if (out.figuresAvailable) {
+    const flat = JSON.stringify(o).replace(/[,\s]/g, "");
+    out.figuresUsed = wf.amounts.some(n => flat.indexOf(String(n)) > -1);
+  }
 
   return out;
 }
 
-/* Confidence is computed here and is explainable. The model never states it. */
-/* Five checks, each worth points. Eight points available. The user can see the
-   whole sum, because a score you cannot audit is just a mood with a number on it. */
+/* ------------------------------------------------------------
+   THE FACT CHECK
+
+   The old score only measured form: were real names used, did the
+   stages link, was a figure labelled. A card could break a saved
+   fact outright and still read Firm, 9 of 9, which is how a score
+   teaches people to ignore it.
+
+   So a second, cheap pass reads the card against the saved facts
+   and the question. It may only report something by QUOTING it,
+   and code then checks each quote really is in the card, the facts
+   or the question. A finding with no verifiable quote is dropped.
+   That keeps RULES rule 4: nothing reaches the score unless it can
+   be shown on screen.
+   ------------------------------------------------------------ */
+const CHECK_SCHEMA = {
+  type:"object",
+  properties:{
+    conflicts:{ type:"array", maxItems:4, items:{ type:"object", properties:{
+      card_quote:{ type:"string", description:"Exact words copied from the card. 4 to 15 words." },
+      fact_quote:{ type:"string", description:"Exact words copied from the fact or rule it contradicts. 4 to 15 words." },
+      why:{ type:"string", description:"Why these cannot both be true. MAX 20 WORDS." }
+    }, required:["card_quote","fact_quote","why"], propertyOrdering:["card_quote","fact_quote","why"] } },
+    unsupported:{ type:"array", maxItems:3, items:{ type:"object", properties:{
+      card_quote:{ type:"string", description:"Exact words copied from the card that state, as fact, something nobody gave it. 4 to 15 words." },
+      why:{ type:"string", description:"What it assumed. MAX 16 WORDS." }
+    }, required:["card_quote","why"], propertyOrdering:["card_quote","why"] } },
+    unanswered:{ type:"string", description:"If the card does not answer what the user actually asked, copy the exact words of their question it leaves unanswered. Empty string if it answers it." }
+  },
+  required:["conflicts","unsupported","unanswered"],
+  propertyOrdering:["conflicts","unsupported","unanswered"]
+};
+
+/* flips_if is left out on purpose. It describes the world in which the read is
+   wrong, so it contradicts the read's own premises by design, and the check was
+   flagging it as a conflict with the saved facts. */
+function cardFlat(o) {
+  const parts = [o.headline, o.stance_why, o.only_true_here, o.behaviour_used, o.mechanism_new_in_r3]
+    .concat(o.assumptions || [])
+    .concat((o.rounds || []).map(r => [r.actor, r.triggered_by, r.move, r.net_effect, r.risk && r.risk.text, r.risk && r.risk.signal].join(". ")))
+    .concat((o.actors || []).map(a => a.name + ". " + a.wants + ". " + a.lever));
+  const mb = o.mode_block || {};
+  (function walk(v) { if (typeof v === "string") parts.push(v); else if (v && typeof v === "object") Object.values(v).forEach(walk); })(mb);
+  return parts.filter(Boolean).join(NL);
+}
+
+function checkPrompt(ws) {
+  const c = ws.ctx || {};
+  const facts = (ws.facts || []).slice(-14).map((f, i) => "F" + (i + 1) + ". " + f.text);
+  return "You check a market simulation card for a facade and fenestration business. You do not rewrite it." + NL +
+    "Report three things, and ONLY by copying exact words. A finding you cannot quote is not a finding." + NL + NL +
+    "1. CONFLICTS. A sentence on the card that cannot be true if a saved fact or industry rule below is true. " +
+    "Only real contradictions, not things the facts merely fail to mention." + NL +
+    "2. UNSUPPORTED. A sentence on the card that states as fact something the user did not say and the facts do not " +
+    "support, and that the answer depends on. A clearly stated assumption or condition is fine and is NOT unsupported. " +
+    "A specific figure about a rival, the market or an outcome, such as a percentage, a count or a number of days, that " +
+    "nobody gave and that is not simple arithmetic on the user's own anchor IS unsupported." + NL +
+    "3. UNANSWERED. Whether the card answers what the user actually asked. If they asked how much, whether, or what " +
+    "happens to something, and the card talks about something else, copy the words of their question it leaves unanswered. " +
+    "A broad question such as " + QL + "what changes for us" + QR + " is answered by any card that says what changes for them. " +
+    "Only flag a question the card clearly sidesteps." + NL + NL +
+    "Be strict but fair. Most cards have no conflicts. Report nothing rather than something weak." + NL + NL +
+    "INDUSTRY RULES:" + NL +
+    "R1. A system house sells profiles, hardware and engineering to fabricators. A fabricator sells the finished installed window. Different products at roughly three times different prices." + NL +
+    "R2. Metal is priced globally on the LME. Nobody has cheaper aluminium. Undercutting comes from conversion cost, scale and margin." + NL +
+    "R3. Metal is only part of a system price. A rise of some percentage in metal is a much smaller rise in the system price, never the same percentage." + NL + NL +
+    "THE USER'S COMPANY AND PRODUCT:" + NL + [c.company, c.product, c.anchor ? "Price anchor: " + c.anchor : ""].filter(Boolean).join(NL) + NL + NL +
+    "HOW BUYING WORKS IN THEIR MARKET:" + NL + (behaviourLines(ws).join(NL) || "(not recorded)") + NL + NL +
+    "SAVED FACTS:" + NL + (facts.join(NL) || "(none)");
+}
+
+const normQ = s => String(s || "").toLowerCase().replace(/[^a-z0-9₹$€]+/g, " ").trim();
+function quoted(q, hay) {
+  const a = normQ(q), b = normQ(hay);
+  return a.split(" ").length >= 3 && b.indexOf(a) > -1;
+}
+
+async function checkCard(o, ws, question) {
+  const res = await callGemini(S.key, checkPrompt(ws),
+    "THE USER ASKED:" + NL + question + NL + NL + "THE CARD:" + NL + cardFlat(o), CHECK_SCHEMA, null, { model: MODEL_FAST, temp: 0 });
+  const flat = cardFlat(o);
+  const factHay = [checkPrompt(ws)].join(NL);
+  const conflicts = (res.conflicts || []).filter(x => quoted(x.card_quote, flat) && quoted(x.fact_quote, factHay));
+  const unsupported = (res.unsupported || []).filter(x => quoted(x.card_quote, flat));
+  const un = (res.unanswered || "").trim();
+  const unanswered = un && quoted(un, question) ? un : "";
+  return { ran: true, conflicts, unsupported, unanswered, dropped: (res.conflicts || []).length - conflicts.length };
+}
+
+/* Confidence is computed here and is explainable. The model never states it.
+   Every row is something code observed, or something the fact check quoted and
+   code then found on the card. The user sees the whole sum, because a score you
+   cannot audit is just a mood with a number on it.
+
+   It used to sit between 7 and 9 almost every time, because every row measured
+   whether the card LOOKED careful. The heaviest rows now ask whether it is
+   RIGHT against what you told it, and whether it answered your question, and
+   Firm needs both. */
 function confidence(o, ws, an) {
   const rows = [];
-  const packed = ctxComplete(ws);
+  const ck = an.check || { ran: false };
+  const nFacts = (ws.facts || []).length;
+
   rows.push({
-    name: "Your context",
-    pts: packed >= 3 ? 2 : packed >= 1 ? 1 : 0, max: 2,
-    detail: packed >= 3 ? "Filled in, " + packed + " of 4 fields."
-      : packed >= 1 ? "Only " + packed + " of 4 fields filled in."
-      : "Nothing saved, so the model is guessing your world.",
-    fix: packed >= 3 ? "" : "Fill in the rest of your workspace context."
+    name: "Agrees with your saved facts",
+    pts: !ck.ran ? 0 : ck.conflicts.length ? 0 : nFacts ? 3 : 1, max: 3,
+    detail: !ck.ran ? "Not checked. The fact check did not run, so nothing here says whether this contradicts what you told it."
+      : ck.conflicts.length ? ck.conflicts.length + (ck.conflicts.length === 1 ? " statement contradicts" : " statements contradict") + " what you told it: " +
+          ck.conflicts.map(x => QL + x.card_quote + QR + " against " + QL + x.fact_quote + QR).join("; ") + "."
+      : nFacts ? "Checked against your " + nFacts + " saved facts and the industry rules. Nothing contradicts them."
+      : "Checked against the industry rules only, because you have no saved facts.",
+    fix: !ck.ran ? "Run it again when the connection is steady." : ck.conflicts.length ? "Challenge this card, or ask again with the fact in your question." : nFacts ? "" : "Add facts you know to be true to your workspace."
+  });
+
+  rows.push({
+    name: "Answers what you asked",
+    pts: !ck.ran ? 0 : ck.unanswered ? 0 : 2, max: 2,
+    detail: !ck.ran ? "Not checked."
+      : ck.unanswered ? "It does not answer " + QL + ck.unanswered + QR + "."
+      : "It answers the question you asked.",
+    fix: ck.ran && ck.unanswered ? "Ask that part on its own, as a narrower question." : ""
+  });
+
+  const nu = ck.ran ? ck.unsupported.length : 0;
+  rows.push({
+    name: "Says what it assumed",
+    pts: !ck.ran ? 0 : nu === 0 ? 2 : nu === 1 ? 1 : 0, max: 2,
+    detail: !ck.ran ? "Not checked."
+      : nu === 0 ? "Anything it assumed is stated openly as an assumption."
+      : "It states as fact " + (nu === 1 ? "something" : nu + " things") + " nobody gave it: " + ck.unsupported.map(x => QL + x.card_quote + QR).join("; ") + ".",
+    fix: nu ? "Tell it the real answer, as a fact in your workspace or in the question." : ""
   });
 
   const nA = (o.actors || []).length;
@@ -2831,9 +3120,36 @@ function confidence(o, ws, an) {
     fix: an.archetypes === 0 ? "" : "Add more real names under Competitors and Your channel."
   });
 
+  const idle = an.actorsIdle || [];
+  rows.push({
+    name: "Everyone named does something",
+    pts: idle.length ? 0 : 1, max: 1,
+    detail: idle.length ? idle.join(", ") + (idle.length === 1 ? " is" : " are") + " listed but never acts in the answer." : "Every actor listed takes part.",
+    fix: ""
+  });
+
+  if (an.figuresAvailable) {
+    rows.push({
+      name: "Works through your figures",
+      pts: an.figuresUsed ? 1 : 0, max: 1,
+      detail: an.figuresUsed ? "It uses the amounts worked out from your anchor." : "Your question had a percentage and you have an anchor, but it never gives the amount.",
+      fix: an.figuresUsed ? "" : "Ask what that percentage means in money against your anchor."
+    });
+  }
+
+  const packed = ctxComplete(ws);
+  rows.push({
+    name: "Your context",
+    pts: packed >= 3 ? 1 : 0, max: 1,
+    detail: packed >= 3 ? "Filled in, " + packed + " of 4 fields."
+      : packed >= 1 ? "Only " + packed + " of 4 fields filled in."
+      : "Nothing saved, so the model is guessing your world.",
+    fix: packed >= 3 ? "" : "Fill in the rest of your workspace context."
+  });
+
   rows.push({
     name: "No invented figures",
-    pts: an.estimates === 0 ? 2 : 0, max: 2,
+    pts: an.estimates === 0 ? 1 : 0, max: 1,
     detail: an.estimates === 0 ? "Every number is yours, or stated relative to yours."
       : an.estimates + (an.estimates > 1 ? " figures are" : " figure is") + " the model's own guess.",
     fix: an.estimates === 0 ? "" : "Set your price anchor so figures can be stated against it."
@@ -2870,14 +3186,34 @@ function confidence(o, ws, an) {
 
   const score = rows.reduce((a, r) => a + r.pts, 0);
   const max = rows.reduce((a, r) => a + r.max, 0);
-  const band = score >= 7 ? "Firm" : score >= 4 ? "Mixed" : "Thin";
-  return { band, score, max, rows };
+  // Firm is earned, not reached by points alone: the card must have been checked,
+  // agree with every saved fact, and answer the question that was asked.
+  const passed = ck.ran && !ck.conflicts.length && !ck.unanswered;
+  const band = (passed && score >= max * 0.8) ? "Firm" : score >= max * 0.5 ? "Mixed" : "Thin";
+  return { band, score, max, rows, v: 2 };
 }
 
 /* ============================================================
    GEMINI
    ============================================================ */
-const MODEL = "gemini-3.5-flash-lite";
+/* Two tiers, both on Google's free tier.
+
+   The full Flash model writes the simulation, because that is the answer the
+   person actually reads and it has to hold a dozen rules at once. Flash lite
+   kept dropping the ones that mattered most, such as a saved fact saying nobody
+   has cheaper metal. The lite model does the quick jobs: working out what a
+   message is, small talk, and checking a card against the saved facts.
+
+   Pro is not an option on a free key. Every Pro id returned 429 with a zero
+   quota when tested on 23 October 2026.
+
+   The full tier is a short list, tried in order, because on the same afternoon
+   three of the four Flash versions answered 503 "high demand" to a real card
+   while one answered in fifteen seconds. Only when all of them refuse does the
+   call drop to the lite model, and the card then says so. */
+const MODEL_CHAIN = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.7-flash"];
+const MODEL = MODEL_CHAIN[0];
+const MODEL_FAST = "gemini-3.5-flash-lite";
 
 /* Google accepts two different credentials on this endpoint and they need
    DIFFERENT headers: an API key goes in x-goog-api-key, an OAuth access token
@@ -2888,14 +3224,46 @@ function authHeader(key, mode) {
   return mode === "bearer" ? { "Authorization": "Bearer " + key } : { "x-goog-api-key": key };
 }
 
-async function callGemini(key, sys, user, schema, mode) {
+/* opts.model picks the tier, MODEL_FAST by default, because most calls are quick
+   jobs. opts.tokens and opts.temp override the defaults. The model that actually
+   answered is left in lastModel, so the card can say which one wrote it. */
+let lastModel = "", lastFallback = "";
+/* A model that just refused is rested for two minutes. Without this, every call
+   in one simulation (the card, the check, the repair) walked the whole chain
+   again, and a single card took two minutes on a busy afternoon. */
+const COOL_MS = 120000;
+const modelCool = {};
+async function callGemini(key, sys, user, schema, mode, opts) {
+  const o = opts || {};
+  const model = o.model || MODEL_FAST;
+  // A full tier call walks the chain, then the lite model. A lite call is tried once.
+  const order = model === MODEL_FAST ? [MODEL_FAST]
+    : [model].concat(MODEL_CHAIN.filter(m => m !== model), [MODEL_FAST])
+        .filter(m => m === MODEL_FAST || !(modelCool[m] > Date.now()));
+  let err = null;
+  for (const m of order) {
+    try {
+      return await callGeminiAuth(key, sys, user, schema, mode, Object.assign({}, o, { model: m }));
+    } catch (e) {
+      err = e;
+      // Throttled, missing or overloaded: try the next model. Anything else, such
+      // as a bad key or a truncated answer, is the same on every model, so stop.
+      if (!(e.status === 429 || e.status === 404 || e.status >= 500)) throw e;
+      if (m !== MODEL_FAST) modelCool[m] = Date.now() + COOL_MS;
+      lastFallback = m + " answered " + e.status + ": " + (e.message || "");
+    }
+  }
+  throw err;
+}
+
+async function callGeminiAuth(key, sys, user, schema, mode, o) {
   try {
-    return await callGeminiOnce(key, sys, user, schema, mode || S.authMode || "key");
+    return await callGeminiOnce(key, sys, user, schema, mode || S.authMode || "key", o);
   } catch (e) {
     // Only worth a second attempt when the credential itself was rejected.
     if (e.reason === "API_KEY_INVALID" && !mode) {
       const alt = (S.authMode === "bearer") ? "key" : "bearer";
-      const out = await callGeminiOnce(key, sys, user, schema, alt);
+      const out = await callGeminiOnce(key, sys, user, schema, alt, o);
       S.authMode = alt; save();
       return out;
     }
@@ -2903,21 +3271,41 @@ async function callGemini(key, sys, user, schema, mode) {
   }
 }
 
-async function callGeminiOnce(key, sys, user, schema, mode) {
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent";
-  const res = await fetch(url, {
+async function callGeminiOnce(key, sys, user, schema, mode, o) {
+  o = o || {};
+  const model = o.model || MODEL_FAST;
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent";
+  /* A request with no time limit can hang for minutes on an overloaded model,
+     with the screen saying "Reading that" the whole time. Past the limit it counts
+     as the model being unavailable, so the chain moves on to the next one. */
+  const ac = typeof AbortController === "function" ? new AbortController() : null;
+  const limit = o.timeout || (model === MODEL_FAST ? 30000 : 75000);
+  const timer = ac ? setTimeout(() => ac.abort(), limit) : 0;
+  let res;
+  try {
+    res = await fetch(url, {
+    signal: ac ? ac.signal : undefined,
     method:"POST",
     headers: Object.assign({ "Content-Type":"application/json" }, authHeader(key, mode)),
     body: JSON.stringify({
       systemInstruction:{ parts:[{ text: sys }] },
       contents:[{ role:"user", parts:[{ text: user }] }],
       generationConfig:{
-        temperature:0.55, maxOutputTokens:4096,
+        temperature: o.temp != null ? o.temp : 0.55, maxOutputTokens: o.tokens || 4096,
         responseMimeType:"application/json", responseSchema:schema
       }
     })
   });
+  } catch (e) {
+    clearTimeout(timer);
+    if (e && e.name === "AbortError") {
+      const er = new Error(model + " did not answer within " + Math.round(limit / 1000) + " seconds.");
+      er.status = 504; er.kind = "timeout"; throw er;
+    }
+    throw e;
+  }
   if (!res.ok) {
+    clearTimeout(timer);
     let detail = "", reason = "";
     try {
       const j = await res.json();
@@ -2930,7 +3318,13 @@ async function callGeminiOnce(key, sys, user, schema, mode) {
     err.status = res.status; err.reason = reason; err.mode = mode;
     throw err;
   }
-  const j = await res.json();
+  let j;
+  try { j = await res.json(); }
+  catch (e) {
+    const er = new Error(e && e.name === "AbortError" ? model + " stopped answering part way through." : "The model's reply could not be read.");
+    er.status = 504; er.kind = "timeout"; throw er;
+  }
+  finally { clearTimeout(timer); }
   const cand = (j.candidates || [])[0];
   if (!cand) { const e = new Error("The model returned nothing."); e.kind = "empty"; throw e; }
   if (cand.finishReason && cand.finishReason !== "STOP") {
@@ -2939,6 +3333,7 @@ async function callGeminiOnce(key, sys, user, schema, mode) {
   // Never read parts[0] on a thinking model — the reasoning part carries no text.
   const text = (cand.content && cand.content.parts || []).map(p => p.text).filter(Boolean).join("");
   if (!text) { const e = new Error("The model returned no answer text."); e.kind = "empty"; throw e; }
+  lastModel = model;
   try { return JSON.parse(text); }
   catch (e) { const er = new Error("The model's answer was not valid JSON."); er.kind = "parse"; throw er; }
 }
@@ -3009,6 +3404,8 @@ async function revealCard(host, data, an, conf, mode, fast) {
   cf.title = "How this was scored"; cf.onclick = () => showConfidence(conf, an);
   bar.appendChild(cf);
   if (an.generic) { const g = el("span", "chip call-changes fadein", "Generic read"); bar.appendChild(g); }
+  const STANCE = { MAINLY_A_THREAT:["call-breaks","Mainly a threat"], MAINLY_AN_OPPORTUNITY:["call-holds","Mainly an opportunity"], BOTH:["call-changes","Threat and opportunity"] };
+  if (STANCE[data.stance]) bar.appendChild(el("span", "chip fadein " + STANCE[data.stance][0], STANCE[data.stance][1]));
   const mchip = el("button", "chip mode fadein", modeById(mode).name);
   mchip.title = "Run this question as a different kind of simulation";
   mchip.onclick = () => {
@@ -3020,26 +3417,52 @@ async function revealCard(host, data, an, conf, mode, fast) {
   bar.appendChild(mchip);
 
   await at(F.headline);
-  const h = el("h2", "headline fadein", words(data.headline, 14)); body.appendChild(h);
+  const h = el("h2", "headline fadein", words(data.headline, 20)); body.appendChild(h);
 
   await at(F.flips);
+  if (data.stance_why) {
+    const o = el("div", "onlyhere fadein");
+    o.appendChild(el("span", "lb", data.stance === "MAINLY_AN_OPPORTUNITY" ? "Why it helps you" : data.stance === "BOTH" ? "Why it cuts both ways" : "Why it hurts you"));
+    o.appendChild(el("span", "", words(data.stance_why, 24)));
+    body.appendChild(o);
+  }
   if (data.only_true_here) {
     const o = el("div", "onlyhere fadein");
     o.appendChild(el("span", "lb", "Only true here"));
-    o.appendChild(el("span", "", words(data.only_true_here, 16)));
+    o.appendChild(el("span", "", words(data.only_true_here, 24)));
     body.appendChild(o);
   }
   if (data.behaviour_used && !/^none given/i.test(data.behaviour_used.trim())) {
     const bx = el("div", "onlyhere fadein");
     bx.appendChild(el("span", "lb", "Because of how this market works"));
-    bx.appendChild(el("span", "", words(data.behaviour_used, 20)));
+    bx.appendChild(el("span", "", words(data.behaviour_used, 28)));
     body.appendChild(bx);
   }
   if (data.flips_if) {
     const f = el("div", "flips fadein");
     f.appendChild(el("span", "lb", "Flips if"));
-    f.appendChild(el("span", "", words(data.flips_if, 18)));
+    f.appendChild(el("span", "", words(data.flips_if, 26)));
     body.appendChild(f);
+  }
+  // Said openly, so nobody mistakes a condition for a finding.
+  const asm = (data.assumptions || []).filter(a => typeof a === "string" && a.trim());
+  if (asm.length) {
+    const f = el("div", "flips fadein");
+    f.appendChild(el("span", "lb", "It assumed"));
+    f.appendChild(el("span", "", asm.map((a, i) => { const w = words(a, 22); return i ? w.charAt(0).toLowerCase() + w.slice(1) : w; }).join(" Also, ")));
+    body.appendChild(f);
+  }
+  const ck = an.check;
+  if (ck && ck.ran && ck.conflicts.length) {
+    const w = el("div", "unitwarn fadein");
+    w.appendChild(el("span", "lb", "Contradicts what you told it"));
+    w.appendChild(el("span", "", ck.conflicts.map(x => QL + x.card_quote + QR + " does not fit " + QL + x.fact_quote + QR + ".").join(" ")));
+    body.appendChild(w);
+  } else if (ck && ck.repaired) {
+    const n = el("div", "onlyhere fadein");
+    n.appendChild(el("span", "lb", "Corrected"));
+    n.appendChild(el("span", "", "The first draft contradicted one of your saved facts, so it was rewritten and checked again."));
+    body.appendChild(n);
   }
 
   /* ---- cascade ---- */
@@ -3069,21 +3492,21 @@ async function revealCard(host, data, an, conf, mode, fast) {
     row.appendChild(who);
 
     if (i > 0 && r.triggered_by) {
-      row.appendChild(el("div", "rtrig", "Because " + words(r.triggered_by, 13)));
+      row.appendChild(el("div", "rtrig", "Because " + words(r.triggered_by, 18)));
     }
-    row.appendChild(el("div", "rmove", words(r.move, 20)));
+    row.appendChild(el("div", "rmove", words(r.move, 30)));
     const ne = el("div", "rnet");
     ne.appendChild(el("span", "ar", "For you"));
-    ne.appendChild(el("span", "", words(r.net_effect, 16)));
+    ne.appendChild(el("span", "", words(r.net_effect, 24)));
     row.appendChild(ne);
     if (r.risk && r.risk.text) {
       const rk = el("div", "rrisk" + (r.risk.severity === "HIGH" ? " high" : ""));
       rk.appendChild(el("span", "rl", r.risk.severity === "HIGH" ? "The big risk here" : "Risk here"));
-      rk.appendChild(el("div", "rt", words(r.risk.text, 16)));
+      rk.appendChild(el("div", "rt", words(r.risk.text, 24)));
       if (r.risk.signal) {
         const sg = el("div", "rs");
         sg.appendChild(el("b", "", "Watch for:"));
-        sg.appendChild(el("span", "", words(r.risk.signal, 14)));
+        sg.appendChild(el("span", "", words(r.risk.signal, 20)));
         rk.appendChild(sg);
       }
       row.appendChild(rk);
@@ -3104,7 +3527,7 @@ async function revealCard(host, data, an, conf, mode, fast) {
   if (data.mechanism_new_in_r3 && !an.r3Flat) {
     const nm = el("div", "newmech fadein");
     nm.appendChild(el("span", "lb", "New by the end"));
-    nm.appendChild(el("span", "", words(data.mechanism_new_in_r3, 16)));
+    nm.appendChild(el("span", "", words(data.mechanism_new_in_r3, 24)));
     sect.appendChild(nm);
   }
 
@@ -3129,11 +3552,11 @@ async function revealCard(host, data, an, conf, mode, fast) {
       b.appendChild(hd);
       const w = el("div", "arow");
       w.appendChild(el("span", "al", "Wants"));
-      w.appendChild(el("span", "", words(a.wants, 12)));
+      w.appendChild(el("span", "", words(a.wants, 16)));
       b.appendChild(w);
       const l = el("div", "arow");
       l.appendChild(el("span", "al", "Can"));
-      l.appendChild(el("span", "", words(a.lever, 12)));
+      l.appendChild(el("span", "", words(a.lever, 16)));
       b.appendChild(l);
       if (a.basis === "ARCHETYPE") b.appendChild(el("div", "aarch", "A type, not a named company. Add real names to your workspace to improve this."));
       b.onclick = () => openInterview(a, data, mode);
@@ -3172,8 +3595,8 @@ async function revealCard(host, data, an, conf, mode, fast) {
                   CHECK_PUBLISHED_DATA:"Check published data", ASK_SALES:"Ask your sales team", INTERNAL_RECORD:"Internal records" };
     gaps.forEach(g => {
       const b = el("div", "gap");
-      b.appendChild(el("div", "gu", words(g.unknown, 12)));
-      b.appendChild(el("div", "gw", words(g.why, 14)));
+      b.appendChild(el("div", "gu", words(g.unknown, 16)));
+      b.appendChild(el("div", "gw", words(g.why, 20)));
       b.appendChild(el("div", "gh", "→ " + (HOW[g.how] || "Verify")));
       gl.appendChild(b);
     });
@@ -3191,7 +3614,7 @@ async function revealCard(host, data, an, conf, mode, fast) {
     nq.forEach(q => {
       const b = el("button", "nextq");
       b.appendChild(el("span", "nl", LANE[q.lane] || "Next"));
-      b.appendChild(el("span", "nq", words(q.q, 16)));
+      b.appendChild(el("span", "nq", words(q.q, 20)));
       b.onclick = () => { $("#ta").value = q.q; autosize(); $("#ta").focus(); updateSend(); };
       nl.appendChild(b);
     });
@@ -3208,7 +3631,7 @@ async function revealCard(host, data, an, conf, mode, fast) {
     let ch = null, err = null;
     try {
       if (!S.key) { await sleep(700); ch = demoChallenge(data); }
-      else ch = await callGemini(S.key, challengePrompt(data, mode, activeWs()), "Argue against this read.", CHALLENGE_SCHEMA);
+      else ch = await callGemini(S.key, challengePrompt(data, mode, activeWs()), "Argue against this read.", CHALLENGE_SCHEMA, null, { model: MODEL });
     } catch (e) { err = e; }
     chBtn.disabled = false; chBtn.textContent = "Challenge this";
     if (err) {
@@ -3226,6 +3649,12 @@ async function revealCard(host, data, an, conf, mode, fast) {
     navigator.clipboard.writeText(systemPrompt(mode, ws) + "\n\n--- JSON SCHEMA ---\n" + JSON.stringify(buildSchema(mode), null, 2))
       .then(() => toast("Prompt and schema copied. Paste into any model."));
   });
+  // Which model wrote it, said plainly, because a throttled key drops to the
+  // lighter one and the answer is noticeably thinner when it does.
+  if (data.model_used) {
+    const lite = data.model_used === MODEL_FAST;
+    ft.appendChild(el("span", "fmodel", lite ? "Written by the lighter model, because every full model was busy. Run it again later for a fuller answer." : "Written by " + data.model_used));
+  }
   card.appendChild(ft);
 }
 
@@ -3364,6 +3793,11 @@ const FOLLOWUP = /^(why|how come|what do you mean|explain|elaborate|say more|go 
 function looksLikeFollowUp(text, chat) {
   if (!chat || !chat.turns.some(t => t.role === "card")) return false;
   const t = text.trim();
+  // "What about raising prices in Pune instead?" starts like a follow up but
+  // carries a scenario of its own, and was refused as off the card. A message
+  // that names a new kind of move is a new question, unless it is asking why.
+  const scenario = inferMode(t) && t.split(/\s+/).length > 5 && !/^(why|how come|explain|what do you mean|are you sure)\b/i.test(t);
+  if (scenario) return false;
   if (FOLLOWUP.test(t)) return true;
   // Short and referential, with no scenario of its own.
   const wordCount = t.split(/\s+/).length;
@@ -3374,43 +3808,70 @@ function looksLikeFollowUp(text, chat) {
 const FOLLOWUP_SCHEMA = {
   type:"object",
   properties:{
-    answer:{ type:"string", description:"A direct answer to what was asked, grounded in the card already on screen. Plain sentences. MAX 70 WORDS." },
+    answer:{ type:"string", description:"A direct answer to what was asked, grounded in the conversation and the card. Plain sentences. MAX 150 WORDS." },
     basis:{ type:"string", enum:["FROM_THE_CARD","FROM_YOUR_CONTEXT","MY_GENERAL_KNOWLEDGE","I_DO_NOT_KNOW"] },
-    changes_the_read:{ type:"string", description:"Whether this changes the original read, and how. Write exactly: no change, if it does not. MAX 16 WORDS." }
+    changes_the_read:{ type:"string", description:"Whether this changes the original read, and how. Write exactly: no change, if it does not. MAX 20 WORDS." },
+    run_next:{ type:"string", description:"If answering properly needs a fresh simulation, that question written ready to run, in the user's words. Otherwise an empty string. MAX 20 WORDS." }
   },
-  required:["answer","basis","changes_the_read"],
-  propertyOrdering:["answer","basis","changes_the_read"]
+  required:["answer","basis","changes_the_read","run_next"],
+  propertyOrdering:["answer","basis","changes_the_read","run_next"]
 };
 
-function followUpPrompt(card, mode, ws) {
+/* A follow up used to see only the card's headline and stages, and nothing that
+   was said. Asked "what did I originally ask you?", it answered that it did not
+   know, and each reply forgot the one before it. It now gets the question, the
+   whole card including the warning signals, and the conversation since. */
+function followUpPrompt(chat, cardTurn, ws) {
+  const card = cardTurn.card.data || {};
+  const after = chat.turns.slice(cardTurn.index + 1).slice(-8).map(t =>
+    t.role === "user" ? "User: " + t.text
+    : t.role === "reply" ? "You: " + ((t.data && t.data.answer) || "")
+    : t.role === "small" ? "You: " + ((t.data && t.data.text) || "") : "").filter(Boolean);
+  const KIND = t => (t || "").toLowerCase();
   return `You produced this read for a facade and fenestration business, and the user is now asking
 you about it. Answer their question directly. This is a conversation, not a new simulation.
 
+THE QUESTION THEY ORIGINALLY ASKED:
+` + (cardTurn.question || "(not recorded)") + `
+
 THE READ ON SCREEN:
 CLAIM: ` + (card.headline || "") + `
+THREAT OR OPPORTUNITY: ` + (card.stance || "") + ". " + (card.stance_why || "") + `
 ONLY TRUE HERE: ` + (card.only_true_here || "") + `
 LOCAL PRACTICE USED: ` + (card.behaviour_used || "") + `
+IT ASSUMED: ` + ((card.assumptions || []).join("; ") || "nothing stated") + `
+WHO IS INVOLVED:
+` + (card.actors || []).map(a => "  " + a.name + " (" + KIND(a.kind) + "). Wants " + a.wants + ". Can " + a.lever + ".").join(NL) + `
 HOW IT PLAYS OUT:
-` + (card.rounds || []).map((r, i) => (STAGE[i] || "Later") + ": " + r.actor + " " + r.move +
-    ". For you: " + r.net_effect + ". Risk: " + ((r.risk && r.risk.text) || "")).join(NL) + `
+` + (card.rounds || []).map((r, i) => (STAGE[i] || "Later") + ", " + (HZ[r.horizon] || "") + ": " + r.actor + " " + r.move +
+    ". For you: " + r.net_effect + ". Risk: " + ((r.risk && r.risk.text) || "") +
+    ". Early warning to watch for: " + ((r.risk && r.risk.signal) || "")).join(NL) + `
+DETAIL: ` + JSON.stringify(card.mode_block || {}) + `
+FIGURES: ` + (card.numbers_used || []).map(n => n.value + " (" + n.applies_to + ")").join("; ") + `
 IT FLIPS IF: ` + (card.flips_if || "") + `
-WHAT IS UNKNOWN: ` + (card.evidence_gaps || []).map(g => g.unknown).join("; ") + `
+WHAT IS UNKNOWN: ` + (card.evidence_gaps || []).map(g => g.unknown + ", because " + g.why).join("; ") + `
+
+THE CONVERSATION SINCE:
+` + (after.join(NL) || "(nothing yet)") + `
 
 CONTEXT:
 ` + contextPack(ws) + `
 
 HOW TO ANSWER:
-1. Answer the actual question. Do not restate the card.
-2. Say where your answer comes from, in the basis field, and be honest about it. If it rests on the
+1. Answer the actual question, using everything above. Do not restate the card.
+2. If they ask how they would spot something, answer from the early warnings to watch for. Never
+   answer that they will spot it when it happens.
+3. If they ask what they asked or what was said, quote it from above.
+4. Say where your answer comes from, in the basis field, and be honest about it. If it rests on the
    card, say so. If it rests on what the user told you, say so. If it is your own general knowledge
    with nothing to check it against, say so, because that is the weakest kind of answer here. If you
    do not know, say I_DO_NOT_KNOW and say so plainly in the answer too.
-3. If the user pushes back and they are right, say they are right and say what changes. Do not
+5. If the user pushes back and they are right, say they are right and say what changes. Do not
    defend the original read out of habit. If they are wrong, say why, politely and directly.
-4. Never invent a number. No prices, no market sizes, no shares.
-5. If answering properly would need a fresh simulation rather than a conversation, say so and name
-   the question they should run.
-6. Plain sentences. No dashes as punctuation, no slashes between words. Under seventy words.`;
+6. Never invent a number. No prices, no market sizes, no shares, beyond the figures above.
+7. If they have really asked a new question, about a different move, place, product or rival, give
+   a short useful answer anyway and put that question, ready to run, in run_next.
+8. Plain sentences. No dashes as punctuation, no slashes between words. Under 150 words.`;
 }
 
 function demoFollowUp(q) {
@@ -3731,7 +4192,7 @@ function openInterview(actor, data, mode) {
       let out = null, err = null;
       try {
         if (!S.key) { await sleep(650); out = demoInterview(actor, q, seedIndex); }
-        else out = await callGemini(S.key, interviewPrompt(actor, data, ws), q, INTERVIEW_SCHEMA);
+        else out = await callGemini(S.key, interviewPrompt(actor, data, ws), q, INTERVIEW_SCHEMA, null, { model: MODEL });
       } catch (e) { err = e; }
       pend.remove();
       if (err) {
@@ -3979,9 +4440,11 @@ function showConfidence(conf, an) {
     top.appendChild(big);
 
     const meter = el("div", "confmeter");
-    [["Thin", "0 to 3", conf.band === "Thin"],
-     ["Mixed", "4 to 6", conf.band === "Mixed"],
-     ["Firm", "7 to 9", conf.band === "Firm"]].forEach(([nm, rg, on]) => {
+    // Older cards were scored on the form only checklist, out of 9.
+    const v2 = conf.v === 2;
+    [["Thin", v2 ? "under half" : "0 to 3", conf.band === "Thin"],
+     ["Mixed", v2 ? "half or more" : "4 to 6", conf.band === "Mixed"],
+     ["Firm", v2 ? "most, and passed the fact check" : "7 to 9", conf.band === "Firm"]].forEach(([nm, rg, on]) => {
       const seg = el("div", "confseg" + (on ? " on" : ""));
       seg.appendChild(el("span", "cs1", nm));
       seg.appendChild(el("span", "cs2", rg));
@@ -3991,7 +4454,9 @@ function showConfidence(conf, an) {
     s.appendChild(top);
 
     const intro = el("div", "hint");
-    intro.textContent = "Sightline works this out from the answer itself. The model is never asked how confident it is, because a model asked that reports a mood.";
+    intro.textContent = v2
+      ? "Worked out from the answer itself, never by asking the model how sure it is. The heaviest checks are whether it contradicts what you told it and whether it answers your question. A second pass reads the card against your facts, and only what it can quote from the card counts."
+      : "This card was scored before the fact check existed, so it only says how careful the answer looks, not whether it is right. Run the question again for a full check.";
     s.appendChild(intro);
 
     const list = el("div", "conflist");
@@ -4271,7 +4736,7 @@ function renderStream() {
   updateSend();
 
   if (!c) { renderWelcome(box); return; }
-  c.turns.forEach(t => {
+  c.turns.forEach((t, i) => {
     if (t.role === "user") {
       const w = el("div", "uturn"); const b = el("div", "ubub");
       if (!t.followUp && !t.small) b.appendChild(el("span", "umode", modeById(t.mode).name));
@@ -4284,7 +4749,8 @@ function renderStream() {
       const cf = t.conf || confidence(t.data, ws, an);
       revealCard(host, t.data, an, cf, t.mode, true);
     } else if (t.role === "reply") {
-      const host = el("div"); box.appendChild(host); renderReply(host, t.data);
+      const prev = c.turns[i - 1];
+      const host = el("div"); box.appendChild(host); renderReply(host, t.data, prev && prev.role === "user" ? prev.text : "");
     } else if (t.role === "small") {
       const host = el("div"); box.appendChild(host); renderSmall(host, t.data);
     } else if (t.role === "error") {
@@ -4362,6 +4828,14 @@ const scrollDown = () => { const s = $("#stream"); requestAnimationFrame(() => s
    RUN
    ============================================================ */
 let busy = false;
+/* What the router said the person wants, carried from submit into run. Cleared on
+   use, so a later rerun from the mode chip falls back to what the turn recorded. */
+let nextAsk = null;
+
+/* The welcome screen, with its example questions, used to stay above the first
+   message of a new chat until something redrew the stream. */
+function clearWelcome() { const w = $("#streamIn .welcome"); if (w) w.remove(); }
+
 async function run(text, useMode) {
   if (busy) return;
   if (useMode) S.mode = useMode;
@@ -4371,9 +4845,11 @@ async function run(text, useMode) {
     c = { id:uid(), wsId:ws.id, title:words(text, 6), turns:[], updated:Date.now() };
     S.chats.push(c); S.activeChat = c.id;
   }
-  c.turns.push({ role:"user", text, mode:S.mode });
+  const ask = nextAsk || "REACTION"; nextAsk = null;
+  c.turns.push({ role:"user", text, mode:S.mode, ask });
   c.updated = Date.now();
   save(); renderRail();
+  clearWelcome();
 
   const box = $("#streamIn");
   const uw = el("div", "uturn"); const ub = el("div", "ubub");
@@ -4397,7 +4873,7 @@ async function run(text, useMode) {
   scrollDown();
 
   const mode = S.mode;
-  let data = null, errTurn = null;
+  let data = null, errTurn = null, check = null;
   try {
     if (!S.key) {
       await sleep(560);
@@ -4409,9 +4885,37 @@ async function run(text, useMode) {
       data.demoOf = DEMO[mode] ? modeById(mode).name : modeById("rival_response").name;
       if (!DEMO[mode]) data.headline = "Demo card. Add a key to simulate this mode for real.";
     } else {
-      data = await callGemini(S.key, systemPrompt(mode, ws), text, buildSchema(mode));
+      const sys = systemPrompt(mode, ws, { ask, text });
+      const CARD = { model: MODEL, tokens: 8192, temp: 0.5 };
+      data = await callGemini(S.key, sys, text, buildSchema(mode), null, CARD);
+      data.model_used = lastModel;
+      normalise(data);
+      /* The fact check, and one repair. If the card contradicts a saved fact, it is
+         sent back once with the contradiction quoted, then checked again. A check
+         that fails to run is recorded as not run, never as a pass. */
+      clearInterval(tint);
+      tl.textContent = "Checking it against your facts";
+      try { check = await checkCard(data, ws, text); } catch (e) { check = { ran:false, error: e.message || "" }; }
+      if (check.ran && check.conflicts.length) {
+        tl.textContent = "Fixing a contradiction";
+        const fixNote = NL + NL + "YOUR FIRST DRAFT CONTRADICTED THE USER'S SAVED FACTS. Rewrite the whole read so that nothing in it contradicts them:" + NL +
+          check.conflicts.map(x => "  • You wrote " + QL + x.card_quote + QR + ", but " + QL + x.fact_quote + QR + ". " + x.why).join(NL);
+        try {
+          const again = await callGemini(S.key, sys + fixNote, text, buildSchema(mode), null, CARD);
+          again.model_used = lastModel;
+          normalise(again);
+          let check2;
+          try { check2 = await checkCard(again, ws, text); } catch (e) { check2 = { ran:false, error: e.message || "" }; }
+          // Keep the rewrite only if it is genuinely better. A rewrite that cannot be
+          // checked, or still conflicts as badly, does not replace a checked card.
+          if (check2.ran && check2.conflicts.length < check.conflicts.length) {
+            data = again; check = check2; check.repaired = true;
+          }
+        } catch (e) { /* the first card stands, with its conflicts shown */ }
+      }
+      tl.textContent = TICKS[TICKS.length - 1];
     }
-    normalise(data);
+    if (data.demo) normalise(data);
   } catch (e) {
     const st = e.status;
     if (e.reason === "API_KEY_INVALID") {
@@ -4422,6 +4926,8 @@ async function run(text, useMode) {
       errTurn = { role:"error", title:"The key works, the model does not.", body:" This project cannot reach " + MODEL + ", usually because billing is not active on it.", action:"Open key settings" };
     } else if (st === 429) {
       errTurn = { role:"error", title:"Rate limited.", body:" Google is throttling this key, usually a free tier quota. Wait a minute, or enable billing on the key's project.", action:"Open key settings" };
+    } else if (e.kind === "timeout" || st === 503 || st === 504) {
+      errTurn = { role:"error", title:"Google's models are overloaded just now.", body:" Every model tried was busy or too slow to answer. This is on Google's side and usually passes within minutes. Google said: " + (e.message || "") };
     } else if (e.kind === "truncated") {
       errTurn = { role:"error", title:"The answer was cut off.", body:" The model ran out of room before finishing. Try a shorter, more specific question." };
     } else if (e.kind === "parse" || e.kind === "empty") {
@@ -4445,7 +4951,8 @@ async function run(text, useMode) {
     host.appendChild(e);
     c.turns.push(errTurn);
   } else {
-    const an = analyse(data, ws);
+    const an = analyse(data, ws, text);
+    an.check = check || { ran:false, error: data.demo ? "demo" : "" };
     const conf = confidence(data, ws, an);
     c.turns.push({ role:"card", data, mode, an, conf });
     await revealCard(host, data, an, conf, mode, false);
@@ -4972,11 +5479,13 @@ function openWorkspace(id) {
       }
       afBtn.textContent = "Drafting…"; afBtn.disabled = true;
       try {
-        const draft = await callGemini(S.key, DRAFT_PROMPT, "Company or brand: " + who, DRAFT_SCHEMA);
-        if (draft.company) ws.ctx.company = draft.company;
-        if (draft.product) ws.ctx.product = draft.product;
-        if (draft.market) ws.ctx.market = draft.market;
-        if (draft.audience) ws.ctx.audience = draft.audience;
+        const draft = await callGemini(S.key, DRAFT_PROMPT, "Company or brand: " + who, DRAFT_SCHEMA, null, { model: MODEL, tokens: 4096 });
+        /* A draft fills gaps. It never overwrites what the person wrote. The company
+           box doubles as the name box, so a bare name of a few words is replaced by
+           the description, but a description they typed is kept. */
+        const typed = who.trim();
+        ws.ctx.company = (draft.company && typed.split(/\s+/).length <= 5) ? draft.company : typed;
+        ["product", "market", "audience"].forEach(k => { if (draft[k] && !(ws.ctx[k] || "").trim()) ws.ctx[k] = draft[k]; });
         ROSTER_KEYS.forEach(k => {
           if (!Array.isArray(draft[k]) || !draft[k].length) return;
           const have = namesIn(ws, k);
@@ -4984,7 +5493,9 @@ function openWorkspace(id) {
           ws.ctx[k] = have.concat(add).join(", ");
         });
         if (ws.name === "New workspace" && draft.company) ws.name = who;
-        ws.pendingCheck = Array.isArray(draft.uncertain) ? draft.uncertain : [];
+        ws.pendingCheck = Array.isArray(draft.uncertain) ? draft.uncertain.slice() : [];
+        const unsure = (draft.unsure_names || []).filter(x => typeof x === "string" && x.trim());
+        if (unsure.length) ws.pendingCheck.push("Check these names are real and in the right group: " + unsure.join(", ") + ".");
         save(); renderRail(); renderStream();
         openWorkspace(id);
         toast("Draft filled in. Check it before you rely on it.");
@@ -5253,7 +5764,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-08-26-v";
+const BUILD = "2026-10-23-a";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -5605,7 +6116,7 @@ function pageKey(s) {
     if (!S.key) { report(false, "No key entered.", "Paste one above first."); return; }
     tb.textContent = "Testing…"; tb.disabled = true; diag.innerHTML = "";
     const probe = m => callGeminiOnce(S.key, "Reply with JSON.", "Say ok.",
-      { type:"object", properties:{ ok:{ type:"string" } }, required:["ok"] }, m);
+      { type:"object", properties:{ ok:{ type:"string" } }, required:["ok"] }, m, { model: MODEL });
     try {
       await probe("key"); S.authMode = "key"; save();
       report(true, "It works.", "Authenticated as an API key. You are running live.");
@@ -6032,7 +6543,7 @@ function pageAbout(s) {
   v.appendChild(el("label", "", "This copy"));
   const meta = el("div", "confbox");
   meta.innerHTML = "<ul><li>Running from <b>" + esc(location.origin) + "</b></li>" +
-    "<li>Model <b>" + esc(MODEL) + "</b></li>" +
+    "<li>Model <b>" + esc(MODEL) + "</b>, with " + esc(MODEL_FAST) + " for quick jobs and checks</li>" +
     "<li>Storage is <b>" + esc(storageState) + "</b></li>" +
     "<li>Simulation modes: <b>" + MODES.length + "</b> across <b>" + Object.keys(SHAPES).length + "</b> output shapes</li></ul>";
   v.appendChild(meta);
@@ -6298,7 +6809,7 @@ function localSmallTalk(text, ws) {
     open = pickSay(kind, text);
     if (kind.id === "greeting" && who) open = open.replace(/[.!]$/, ", " + who + ".");
   } else if (META.test(text)) {
-    return { text: "I am not a coach, so I cannot help with that directly. What I can do is let you " +
+    return { text: "That one is more about you than about the market, and career advice is not what I am built for. What I can do is let you " +
                    "test a real move before you make it, which is the part of the job that is hardest to practise. " +
                    "Try one of these.",
              suggestions: reframeExamples(S.mode).slice(0, 2), source:"local" };
@@ -6323,7 +6834,7 @@ function localSmallTalk(text, ws) {
 const CHAT_SCHEMA = {
   type:"object",
   properties:{
-    reply:{ type:"string", description:"At most two short sentences. Warm, plain, never scolding. End by inviting them to describe a decision." },
+    reply:{ type:"string", description:"Two or three short sentences. Warm, plain, never scolding. Respond to what they actually said, then invite them to describe a decision." },
     suggestions:{ type:"array", minItems:0, maxItems:3,
       items:{ type:"string", description:"A question they might actually have meant, specific to their company and market, phrased as they would say it. Max 14 words." } }
   },
@@ -6340,8 +6851,13 @@ const CHAT_SCHEMA = {
    looking at and handled differently. Treating a real question as small talk is
    the failure worth avoiding: answering "hello" with suggestions is charming,
    answering somebody's actual strategy question with "hello" is not. */
-function chatPrompt(ws, kind) {
-  const framing = kind === "off topic"
+function chatPrompt(ws, kind, chat) {
+  const lc = lastCardTurn(chat);
+  const framing = kind === "about"
+    ? "They are asking what you are, what you are called, or how you work. Answer briefly and honestly: you have no name of " +
+      "your own; you work out how a facade market reacts to a move they describe, using their workspace context, and you " +
+      "can also help them price something or think through why something is happening in their business."
+    : kind === "off topic"
     ? "They have said something social or off topic. Acknowledge it lightly and with good humour, " +
       "without pretending to be a general purpose assistant, then turn to what they might want. " +
       "If what they asked has a factual answer you cannot possibly hold, say plainly that you " +
@@ -6349,11 +6865,10 @@ function chatPrompt(ws, kind) {
     : kind === "greeting"
       ? "They have greeted you or asked how you are. Answer that first, briefly and warmly."
       : kind === "meta"
-      ? "They are asking about themselves, or for general help, rather than about a market decision. " +
-        "Be honest about what you are: you work out how a facade market reacts to a specific move, " +
-        "and you are not a coach, a mentor or a general assistant. Say that briefly and without " +
-        "apology. Then turn it into something useful by proposing real decisions from their own " +
-        "context that somebody in their position would genuinely want to pressure test."
+      ? "They are asking about their own career or skills rather than about their market. Be warm, not curt. " +
+        "Say briefly that you are built for market decisions rather than career advice, then make it useful: " +
+        "propose real decisions from their own context that a product manager in their position would " +
+        "genuinely learn from pressure testing."
       : kind === "personal"
       ? "They have said something personal, or about a person rather than about a decision, and it " +
         "may be something difficult. Answer as a decent colleague would: brief, warm, and human. " +
@@ -6367,6 +6882,8 @@ function chatPrompt(ws, kind) {
 
   return "You are the front door of a market simulator for the facade and fenestration industry." + NL +
     framing + NL + NL +
+    (lc ? "YOU ARE MID CONVERSATION. A simulation is already on screen, answering " + QL + lc.question + QR +
+          ". Do not greet them as if they have just arrived, and never say welcome back. Your suggestions may build on that simulation." + NL + NL : "") +
     "ANSWER WHAT THEY ACTUALLY SAID. Read their exact words and respond to those. Somebody who asked" + NL +
     "for a joke has not asked how you are, and being met with " + QL + "I am doing well, thank you" + QR + " reads as" + NL +
     "not having been listened to. Refer to the specific thing they said before moving on." + NL + NL +
@@ -6389,16 +6906,20 @@ function chatPrompt(ws, kind) {
     "THEIR CONTEXT" + NL + contextPack(ws);
 }
 
-async function smallTalk(text, ws, kind) {
+async function smallTalk(text, ws, kind, chat) {
   if (!S.key) return localSmallTalk(text, ws);
   try {
-    const out = await callGemini(S.key, chatPrompt(ws, kind), text, CHAT_SCHEMA);
-    if (!out || !out.reply) throw 0;
+    const out = await callGemini(S.key, chatPrompt(ws, kind, chat), text, CHAT_SCHEMA);
+    if (!out || !out.reply) throw new Error("The model returned an empty reply.");
     const sug = (out.suggestions || []).filter(x => typeof x === "string" && x.trim()).slice(0, 3);
-    return { text: out.reply.trim(), suggestions: sug.length ? sug : reframeExamples(S.mode).slice(0, 2), source:"model" };
+    return { text: out.reply.trim(), suggestions: sug.length ? sug : (kind === "personal" ? [] : reframeExamples(S.mode).slice(0, 2)), source:"model" };
   } catch (e) {
-    // A failed pleasantry is not worth an error card. Fall back and say nothing.
-    return localSmallTalk(text, ws);
+    /* The built in reply still answers, but it now says the live one failed and
+       why. Swallowing the error made a rate limit look like a vague answer, and
+       RULES rule 7 says a check that did not run must say so. */
+    const local = localSmallTalk(text, ws);
+    local.failed = (e && e.message) || "No reason given.";
+    return local;
   }
 }
 
@@ -6411,6 +6932,7 @@ async function runSmallTalk(text, kind) {
   }
   c.turns.push({ role:"user", text, small:true });
   c.updated = Date.now(); save(); renderRail();
+  clearWelcome();
 
   const box = $("#streamIn");
   const uw = el("div", "uturn"); const ub = el("div", "ubub");
@@ -6421,7 +6943,7 @@ async function runSmallTalk(text, kind) {
   const host = el("div"); box.appendChild(host);
   if (S.key) { host.appendChild(el("div", "smthink", "Reading that")); scrollDown(); }
 
-  const out = await smallTalk(text, ws, kind);
+  const out = await smallTalk(text, ws, kind, c);
   host.innerHTML = "";
   c.turns.push({ role:"small", data:out });
   c.updated = Date.now(); save();
@@ -6432,6 +6954,7 @@ async function runSmallTalk(text, kind) {
 function renderSmall(host, out) {
   const box = el("div", "smallbox fadein");
   box.appendChild(el("div", "smalltxt", out.text));
+  if (out.failed) box.appendChild(el("div", "smallfail", "The live reply did not come through, so this is the built in one. Google said: " + out.failed));
   if (out.suggestions && out.suggestions.length) {
     const row = el("div", "smallsug");
     out.suggestions.forEach(q => {
@@ -6526,7 +7049,7 @@ function paintClarify() {
   const head = el("div", "clhead");
   head.appendChild(el("span", "clstep", "Question " + (st.idx + 1) + " of " + total));
   const skip = el("button", "clskip", "Skip and run anyway");
-  skip.onclick = () => { const t = st.base, m = st.mode; closeClarify(); doRun(t, m); };
+  skip.onclick = () => { const t = st.base, m = st.mode; nextAsk = st.ask || null; closeClarify(); doRun(t, m); };
   head.appendChild(skip);
   c.appendChild(head);
 
@@ -6623,7 +7146,7 @@ function paintClarify() {
 
   function next() {
     if (st.idx < clarifySteps().length - 1) { st.idx++; paintClarify(); }
-    else { const t = buildClarified(), m = st.mode; closeClarify(); doRun(t, m); }
+    else { const t = buildClarified(), m = st.mode; nextAsk = st.ask || null; closeClarify(); doRun(t, m); }
   }
 
   function paintFoot() {
@@ -6660,21 +7183,135 @@ function buildClarified() {
   return extra.length ? st.base.replace(/\s*$/, "") + "\n\n" + extra.join(" ") : st.base;
 }
 
+/* ------------------------------------------------------------
+   THE ROUTER
+
+   Word lists were deciding what every message was, and one stray
+   word outvoted everything else in the sentence. Five of fourteen
+   real questions in a live test never reached the simulator: a
+   worried question was met with sympathy, a request for pricing help
+   was told this is not a coach, and "what about Pune instead?" was
+   refused as off the card.
+
+   So a quick call to the lite model reads the message, with the card
+   on screen in view, and says what it is. It costs a fraction of a
+   second and almost nothing on the free tier. The word lists remain
+   as the fallback, without a key or if this call fails.
+   ------------------------------------------------------------ */
+const ROUTE_KINDS = ["SIMULATE","FOLLOW_UP","GREETING","OFF_TOPIC","PERSONAL","ABOUT_THE_TOOL","CAREER","TOO_VAGUE"];
+const ROUTE_SCHEMA = {
+  type:"object",
+  properties:{
+    kind:{ type:"string", enum: ROUTE_KINDS },
+    ask:{ type:"string", enum:["REACTION","ADVICE","DIAGNOSIS"] },
+    mode:{ type:"string", enum: MODES.map(m => m.id) },
+    needs_live_facts:{ type:"boolean" },
+    why:{ type:"string", description:"MAX 12 WORDS" }
+  },
+  required:["kind","ask","mode","needs_live_facts","why"],
+  propertyOrdering:["kind","ask","mode","needs_live_facts","why"]
+};
+
+function lastCardTurn(chat) {
+  if (!chat) return null;
+  const i = chat.turns.map(t => t.role).lastIndexOf("card");
+  if (i < 0) return null;
+  const q = [...chat.turns.slice(0, i)].reverse().find(t => t.role === "user");
+  return { card: chat.turns[i], question: q ? q.text : "", index: i };
+}
+
+function routePrompt(ws, chat) {
+  const lc = lastCardTurn(chat);
+  const recent = chat ? chat.turns.slice(-4).map(t =>
+    t.role === "user" ? "User: " + t.text
+    : t.role === "card" ? "Simulation shown: " + ((t.data && t.data.headline) || "")
+    : t.role === "reply" ? "Reply: " + ((t.data && t.data.answer) || "")
+    : t.role === "small" ? "Reply: " + ((t.data && t.data.text) || "") : "").filter(Boolean) : [];
+  const co = (ws.ctx && ws.ctx.company) || ws.name || "";
+  return "You sort messages for a market simulator used by a product manager in the facade and fenestration industry " +
+    "(aluminium windows, curtain walls, glass). It works out how a market reacts to a move, and it can also recommend a price " +
+    "or a course of action, or suggest likely causes of a problem in their own business." + NL + NL +
+    "Their company: " + co + NL +
+    (lc ? "A simulation is on screen. It answered: " + QL + lc.question + QR + ". Its headline: " + QL + ((lc.card.data && lc.card.data.headline) || "") + QR + NL
+        : "No simulation is on screen yet." + NL) +
+    (recent.length ? "Recent conversation:" + NL + recent.join(NL) + NL : "") + NL +
+    "KIND, pick one:" + NL +
+    "SIMULATE: anything about their business, market, pricing, competitors, channel, fabricators, customers, tenders, codes, costs, launches, " +
+    "sales, payment terms or organisation. This includes questions phrased with worry (" + QL + "we are afraid Jindal will undercut us" + QR + "), " +
+    "requests for help (" + QL + "help me price our new sliding system" + QR + "), and questions with no industry words at all (" +
+    QL + "how do we win more work in Bengaluru?" + QR + "). When a simulation is on screen, a question about a DIFFERENT move, place, product, " +
+    "competitor or time frame is SIMULATE, even if it starts with " + QL + "what about" + QR + " or " + QL + "can you" + QR + "." + NL +
+    "FOLLOW_UP: only when a simulation is on screen and they ask about THAT simulation: why, explain, which risk comes first, what would stop it, " +
+    "they disagree, they want more detail, or they ask what they asked earlier." + NL +
+    "GREETING: hello, thanks, ok, how are you." + NL +
+    "OFF_TOPIC: jokes, food, weather, sport, films, anything not about their work." + NL +
+    "PERSONAL: about someone's wellbeing or a difficult colleague, not a business decision." + NL +
+    "ABOUT_THE_TOOL: what are you, what is your name, how do you work, who made you." + NL +
+    "CAREER: their own career or skills, for example becoming a better product manager." + NL +
+    "TOO_VAGUE: business flavoured but nothing to work with, such as " + QL + "idk" + QR + ", " + QL + "you tell me" + QR + ", " + QL + "strategy" + QR + "." + NL +
+    "When unsure between SIMULATE and anything else, choose SIMULATE." + NL + NL +
+    "ASK: ADVICE when they want a recommendation (help me price, should we, what should we do, how do we). " +
+    "DIAGNOSIS when they ask why something is already happening in their own business. Otherwise REACTION." + NL + NL +
+    "MODE, the closest kind of decision:" + NL + MODES.map(m => m.id + ": " + m.name + ". " + m.desc).join(NL) + NL + NL +
+    "NEEDS_LIVE_FACTS: true ONLY if a useful answer needs current facts about the outside world that they did not give, such as a rival's " +
+    "price today, market share, or recent news. False when they give their own figures, ask what to do, or ask what would happen.";
+}
+
+async function routeMessage(text, chat, ws) {
+  try {
+    const r = await callGemini(S.key, routePrompt(ws, chat), text, ROUTE_SCHEMA, null, { model: MODEL_FAST, temp: 0, tokens: 1024 });
+    if (!r || ROUTE_KINDS.indexOf(r.kind) < 0) return null;
+    if (r.kind === "FOLLOW_UP" && !lastCardTurn(chat)) r.kind = "SIMULATE";
+    return r;
+  } catch (e) {
+    return null;
+  }
+}
+
+/* Sends a message as a new simulation whatever the router would make of it. Used
+   by the button under a follow up reply, for when the router got it wrong. */
+let forceSimulate = false;
+function runAsNew(q) {
+  if (busy) return;
+  forceSimulate = true;
+  $("#ta").value = q; autosize(); updateSend();
+  submit();
+}
+
 /* Every send goes through here. If the question is missing something the
    chosen mode needs, ask before spending a call on a vague answer. Once
    asked for a given question we do not ask again, so a user who skips is
    never nagged. */
-function submit() {
+let routing = false;
+async function submit() {
   const v = $("#ta").value.trim();
-  if (!v || busy) return;
-  if (clarifyState) { const t = buildClarified(), m = clarifyState.mode; closeClarify(); doRun(t, m); return; }
+  if (!v || busy || routing) return;
+  if (clarifyState) { const t = buildClarified(), m = clarifyState.mode; nextAsk = clarifyState.ask || null; closeClarify(); doRun(t, m); return; }
+  const chat = activeChat();
+  const ws0 = activeWs();
+  const clear = () => { $("#ta").value = ""; autosize(); updateSend(); };
+
+  /* With a key, the model router decides. Without one, or if it fails, the word
+     lists below decide, exactly as before. */
+  const forced = forceSimulate; forceSimulate = false;
+  if (S.key && !forced) {
+    routing = true; updateSend();
+    const pend = el("div", "smthink", "Reading that");
+    $("#streamIn").appendChild(pend); scrollDown();
+    const r = await routeMessage(v, chat, ws0);
+    pend.remove(); routing = false; updateSend();
+    if (r) { routeTo(r, v, chat, clear); return; }
+  }
+  if (forced) {
+    S.overrideAnswerability = true;
+    routeTo({ kind:"SIMULATE", ask: /^(help|should|how do|how can|what should)\b/i.test(v) ? "ADVICE" : "REACTION", mode: inferMode(v) || S.mode, needs_live_facts:false }, v, chat, clear);
+    return;
+  }
+
   // A referential message about the card already on screen is a conversation,
   // not a new simulation. It skips the clarify and answerability gates, because
   // neither applies to "why do you say that".
-  const chat = activeChat();
-  const ws0 = activeWs();
   const gap0 = noSubstance(v, ws0);
-  const clear = () => { $("#ta").value = ""; autosize(); updateSend(); };
 
   /* Order matters here, and it was wrong.
 
@@ -6716,11 +7353,38 @@ function submit() {
   doRun(v, mode);
 }
 
+/* Acts on what the router decided. */
+function routeTo(r, v, chat, clear) {
+  const SMALL = { GREETING:"greeting", OFF_TOPIC:"off topic", PERSONAL:"personal", ABOUT_THE_TOOL:"about",
+                  CAREER:"meta", TOO_VAGUE:"vague" };
+  if (r.kind === "FOLLOW_UP") { clear(); runFollowUp(v, chat); return; }
+  if (SMALL[r.kind]) {
+    // Rule 6: something with no decision in it gets a reply, never a fabricated card.
+    clear(); runSmallTalk(v, SMALL[r.kind]); return;
+  }
+  // A real question about the outside world that it cannot know. Stated plainly,
+  // with a way past, because the person may know better.
+  if (r.needs_live_facts && !S.overrideAnswerability) {
+    openCannot(v, answerability(v) || "That depends on facts about the market today that nobody has given it, such as a rival's current price or recent news. It has no web search, so it would be guessing.");
+    return;
+  }
+  S.overrideAnswerability = false;
+  /* The mode the router chose wins over the sticky one on the composer, so a
+     margin question no longer inherits pricing questions from the last run. A mode
+     the person picked by hand still wins over both. */
+  const mode = S.forcedMode || (MODES.some(m => m.id === r.mode) ? r.mode : null) || inferMode(v) || S.mode;
+  const gaps = findGaps(v, mode, activeWs());
+  if (gaps.length) { openClarify(v, mode, gaps, false); clarifyState.ask = r.ask; return; }
+  nextAsk = r.ask;
+  doRun(v, mode);
+}
+
 async function runFollowUp(text, chat) {
   if (busy) return;
   const ws = activeWs();
-  const last = [...chat.turns].reverse().find(t => t.role === "card");
-  if (!last) return;
+  const lc = lastCardTurn(chat);
+  if (!lc) return;
+  const last = lc.card;
   chat.turns.push({ role:"user", text, mode:last.mode, followUp:true });
   chat.updated = Date.now(); save();
 
@@ -6739,7 +7403,7 @@ async function runFollowUp(text, chat) {
   let out = null, err = null;
   try {
     if (!S.key) { await sleep(600); out = demoFollowUp(text); }
-    else out = await callGemini(S.key, followUpPrompt(last.data, last.mode, ws), text, FOLLOWUP_SCHEMA);
+    else out = await callGemini(S.key, followUpPrompt(chat, lc, ws), text, FOLLOWUP_SCHEMA, null, { model: MODEL, tokens: 4096 });
   } catch (e) { err = e; }
   busy = false; updateSend();
   pend.remove();
@@ -6751,12 +7415,12 @@ async function runFollowUp(text, chat) {
     chat.turns.push({ role:"error", title:"That did not go through.", body:" " + (err.message || "") });
   } else {
     chat.turns.push({ role:"reply", data:out });
-    renderReply(host, out);
+    renderReply(host, out, text);
   }
   chat.updated = Date.now(); save(); renderRail(); scrollDown();
 }
 
-function renderReply(host, out) {
+function renderReply(host, out, q) {
   const BASIS = { FROM_THE_CARD:["card","From the answer above"],
                   FROM_YOUR_CONTEXT:["ctx","From what you told it"],
                   MY_GENERAL_KNOWLEDGE:["gen","Its own general knowledge, nothing to check it against"],
@@ -6771,6 +7435,22 @@ function renderReply(host, out) {
     foot.appendChild(c);
   }
   box.appendChild(foot);
+  /* Two ways out of a conversation and into a simulation: the question the reply
+     itself suggests, and the person's own question, for when it was really a new
+     one and got answered as a follow up. */
+  const runs = el("div", "smallsug");
+  const nx = (out.run_next || "").trim();
+  if (nx) {
+    const b = el("button", "sugchip", "Simulate: " + nx);
+    b.onclick = () => runAsNew(nx);
+    runs.appendChild(b);
+  }
+  if (q && (!nx || nx.toLowerCase() !== q.toLowerCase())) {
+    const b = el("button", "sugchip", "Run my question as a new simulation");
+    b.onclick = () => runAsNew(q);
+    runs.appendChild(b);
+  }
+  if (runs.children.length) box.appendChild(runs);
   host.appendChild(box);
 }
 
