@@ -1351,7 +1351,9 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
         How this works
       </button>
       <button class="railbtn" id="btnSettings">
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.6v1.8M8 12.6v1.8M14.4 8h-1.8M3.4 8H1.6M12.5 3.5l-1.3 1.3M4.8 11.2l-1.3 1.3M12.5 12.5l-1.3-1.3M4.8 4.8L3.5 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <!-- A gear. The previous mark was a circle with rays, which read as a sun,
+             and beside a theme toggle it looked like a second light mode switch. -->
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
         Settings
       </button>
     </div>
@@ -2720,6 +2722,12 @@ HOW YOU MUST THINK:
    anchor: "roughly a quarter below your anchor", "you transact around 15% under list". The one
    exception is WORKED FIGURES above, which come from their own anchor and may be quoted exactly.
    If there is no anchor, write "needs your price anchor" and add it to evidence_gaps.
+   This covers EVERY figure, not just prices: no percentage, share, count, number of days, U value
+   or rupee amount that is not in their question, their context, their facts or WORKED FIGURES.
+   "Five to eight percent", "thirty percent below", "a fifteen percent drop in turnover" are all
+   made up unless they gave them to you. Every figure is checked in code against what they gave,
+   and any that is not is shown to them as a guess. Say it in words instead: "a sizeable share",
+   "well below your anchor", "noticeably slower".
 5. EVERY NUMBER DECLARES ITS REFERENT. For anything numeric, fill numbers_used with what it is a
    price OF, for example "ex-works system per square metre", "installed window per square metre",
    "per opening", or "annual contract".
@@ -3049,6 +3057,126 @@ function checkPrompt(ws) {
     "SAVED FACTS:" + NL + (facts.join(NL) || "(none)");
 }
 
+/* ------------------------------------------------------------
+   THE NUMBER AUDIT
+
+   The fact check is a model, and a model let "five to eight percent"
+   through. The user's instruction was plain: no made up numbers. So
+   this is done in code. Every figure on a card, in digits or in
+   words, is compared with the figures the person actually gave: the
+   question, the workspace context, the anchor, the saved facts, and
+   the sums worked from them. Anything else is reported by name, sent
+   back once for a rewrite, and if it survives it is shown on the card
+   and the card cannot read Firm.
+
+   Two things are deliberately not counted. Plain counts with no unit,
+   "two systems", "three stages", because they are not claims about the
+   market. And the price ladder's own positions, which the shape asks for
+   by design: about a tenth, a fifth or a quarter either side of the
+   anchor, and the amounts those make.
+   ------------------------------------------------------------ */
+const NUM_UNITS = ["one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve","thirteen",
+  "fourteen","fifteen","sixteen","seventeen","eighteen","nineteen"];
+const NUM_TENS = { twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90 };
+const NUM_WORD_RE = new RegExp(WB + "((?:(?:" + NUM_UNITS.join("|") + "|" + Object.keys(NUM_TENS).join("|") +
+  "|hundred|thousand|lakh|crore|and)[\\s,]+)*(?:" + NUM_UNITS.join("|") + "|" + Object.keys(NUM_TENS).join("|") +
+  "|hundred|thousand|lakh|crore))" + WB, "gi");
+
+function wordsToNumber(s) {
+  let total = 0, cur = 0;
+  String(s).toLowerCase().split(/[\s,]+/).forEach(w => {
+    const u = NUM_UNITS.indexOf(w);
+    if (u > -1) cur += u + 1;
+    else if (NUM_TENS[w]) cur += NUM_TENS[w];
+    else if (w === "hundred") cur = (cur || 1) * 100;
+    else if (w === "thousand") { total += (cur || 1) * 1000; cur = 0; }
+    else if (w === "lakh") { total += (cur || 1) * 1e5; cur = 0; }
+    else if (w === "crore") { total += (cur || 1) * 1e7; cur = 0; }
+  });
+  return total + cur;
+}
+
+/* Figures that make a claim: a digit, or number words followed by a unit. Each
+   comes back with the text it was written as, so the card can quote it. */
+const CLAIM_UNIT = "(percent|per cent|%|days?|weeks?|months?|years?|rupees?|lakh|crore|thousand|million|billion|euros?|dollars?|tonnes?|kilograms?|square metres?|points?|times)";
+function figuresIn(text) {
+  const t = String(text || "");
+  const out = [];
+  // "90-day" counts as 90 days, hence the optional hyphen before the unit.
+  t.replace(new RegExp("(₹|rs\\.?\\s?|€|\\$)?\\s?(\\d[\\d,]*(?:\\.\\d+)?)\\s*(lakh|crore|k" + WB + "|thousand)?\\s*-?\\s*" + CLAIM_UNIT + "?", "gi"), (m, cur, n, mult, unit) => {
+    let v = parseFloat(n.replace(/,/g, ""));
+    const ml = (mult || "").toLowerCase();
+    if (ml === "lakh") v *= 1e5; else if (ml === "crore") v *= 1e7; else if (ml === "k" || ml === "thousand") v *= 1e3;
+    if (isFinite(v)) out.push({ text: m.trim(), v, unit: (unit || "").toLowerCase(), digits: true });
+    return m;
+  });
+  t.replace(new RegExp(NUM_WORD_RE.source + "(\\s+(to|or)\\s+" + NUM_WORD_RE.source.slice(WB.length) + ")?\\s*" + CLAIM_UNIT, "gi"), m => {
+    const um = m.match(new RegExp(CLAIM_UNIT + "\\s*$", "i"));
+    const unit = um ? um[1].toLowerCase() : "";
+    const parts = m.replace(new RegExp(CLAIM_UNIT + "\\s*$", "i"), "").split(/\s+(?:to|or)\s+/i);
+    parts.forEach(p => {
+      const v = wordsToNumber(p);
+      if (v) out.push({ text: m.trim(), v, unit, digits: false });
+    });
+    return m;
+  });
+  return out.map(f => Object.assign(f, { cls: figClass(f) }));
+}
+
+/* What kind of figure it is, so a 15 from "15 December" cannot vouch for a
+   "fifteen percent" on a card. */
+function figClass(f) {
+  const u = f.unit || "", tx = f.text || "";
+  if (/percent|per cent|%/.test(u) || /%|percent|per cent/i.test(tx)) return "pct";
+  if (/^(day|week|month|year)/.test(u)) return "time";
+  if (/rupee|lakh|crore|euro|dollar|thousand|million|billion/.test(u) || /[₹€$]|rs\.?\s?\d/i.test(tx)) return "money";
+  if (u) return "other";
+  return "plain";
+}
+
+function numberAudit(o, ws, question) {
+  const c = ws.ctx || {};
+  const given = [question, c.company, c.product, c.market, c.audience, c.anchor, c.horizon]
+    .concat((ws.facts || []).map(f => f.text)).join(NL);
+  // Allowed values per kind of figure. A plain number on the card may match any kind.
+  const allowedBy = { pct:new Set(), time:new Set(), money:new Set(), other:new Set(), plain:new Set() };
+  const any = new Set();
+  // Only money is rounded: 7.8 percent in a fact must not vouch for "8 percent".
+  const add = (cls, v) => { allowedBy[cls].add(v); any.add(v); if (cls === "money") { allowedBy.money.add(Math.round(v)); any.add(Math.round(v)); } };
+  figuresIn(given).forEach(f => add(f.cls, f.v));
+  // A figure written without a unit in the context, "18,000 per square metre" or a
+  // "90" day term, may be money or time. Never a percentage: "15 December" is not
+  // permission for "fifteen percent".
+  figuresIn(given).filter(f => f.cls === "plain" || f.cls === "other").forEach(f => { add("money", f.v); add("time", f.v); });
+  workedFigures(question, ws).amounts.forEach(n => add("money", n));
+  const an = anchorAmount(ws);
+  if (an) {
+    add("money", an.n);
+    // The ladder's own positions, as amounts only. The ladder states its positions
+    // in words, "about a tenth under", so no percentage is allowed on its account.
+    [5, 10, 15, 20, 25, 50].forEach(p => { add("money", an.n * (1 - p / 100)); add("money", an.n * (1 + p / 100)); });
+  }
+  const allowed = { has: f => f.cls === "plain" ? any.has(f.v) || any.has(Math.round(f.v))
+    : allowedBy[f.cls].has(f.v) || (f.cls === "money" && allowedBy.money.has(Math.round(f.v))) };
+  // Calendar years and quarters are dates, not claims about the market.
+  const isDate = f => (f.v >= 1990 && f.v <= 2100 && !f.unit) || (f.unit === "" && f.v <= 4 && f.digits);
+  // Timing is the simulation's own job, so ordinary horizons are not claims.
+  // Days are left in, because "a 90 day credit offer" is a claim about terms.
+  const isHorizon = f => (/^week/.test(f.unit) && f.v <= 12) || (/^month/.test(f.unit) && [1, 2, 3, 6, 9, 12, 18, 24].includes(f.v)) ||
+    (/^year/.test(f.unit) && f.v <= 5);
+  const textOf = [cardFlat(o)].concat((o.numbers_used || []).map(n => n.value)).join(NL);
+  const seen = new Set();
+  const invented = [];
+  figuresIn(textOf).forEach(f => {
+    if (isDate(f) || isHorizon(f) || allowed.has(f)) return;
+    if (!f.unit && f.digits && f.v < 10) return;   // a bare small count
+    const k = f.text.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k); invented.push(f.text);
+  });
+  return invented;
+}
+
 const normQ = s => String(s || "").toLowerCase().replace(/[^a-z0-9₹$€]+/g, " ").trim();
 function quoted(q, hay) {
   const a = normQ(q), b = normQ(hay);
@@ -3147,12 +3275,18 @@ function confidence(o, ws, an) {
     fix: packed >= 3 ? "" : "Fill in the rest of your workspace context."
   });
 
+  /* Checked in code against every figure the person gave, not taken from the
+     model's own label for its numbers. */
+  const inv = ck.invented || [];
+  const audited = Array.isArray(ck.invented);
+  const guessed = audited ? inv.length : an.estimates;
   rows.push({
-    name: "No invented figures",
-    pts: an.estimates === 0 ? 1 : 0, max: 1,
-    detail: an.estimates === 0 ? "Every number is yours, or stated relative to yours."
+    name: "No made up figures",
+    pts: guessed === 0 ? 2 : 0, max: 2,
+    detail: guessed === 0 ? (audited ? "Every figure on it comes from you, your saved facts, or a sum worked from your anchor." : "Every number is yours, or stated relative to yours.")
+      : audited ? "It states figures nobody gave it: " + inv.map(x => QL + x + QR).join(", ") + ". Treat them as guesses."
       : an.estimates + (an.estimates > 1 ? " figures are" : " figure is") + " the model's own guess.",
-    fix: an.estimates === 0 ? "" : "Set your price anchor so figures can be stated against it."
+    fix: guessed === 0 ? "" : "If you know the real figure, add it as a fact in your workspace."
   });
 
   rows.push({
@@ -3188,7 +3322,7 @@ function confidence(o, ws, an) {
   const max = rows.reduce((a, r) => a + r.max, 0);
   // Firm is earned, not reached by points alone: the card must have been checked,
   // agree with every saved fact, and answer the question that was asked.
-  const passed = ck.ran && !ck.conflicts.length && !ck.unanswered;
+  const passed = ck.ran && !ck.conflicts.length && !ck.unanswered && !inv.length;
   const band = (passed && score >= max * 0.8) ? "Firm" : score >= max * 0.5 ? "Mixed" : "Thin";
   return { band, score, max, rows, v: 2 };
 }
@@ -3458,10 +3592,17 @@ async function revealCard(host, data, an, conf, mode, fast) {
     w.appendChild(el("span", "lb", "Contradicts what you told it"));
     w.appendChild(el("span", "", ck.conflicts.map(x => QL + x.card_quote + QR + " does not fit " + QL + x.fact_quote + QR + ".").join(" ")));
     body.appendChild(w);
-  } else if (ck && ck.repaired) {
+  }
+  if (ck && ck.invented && ck.invented.length) {
+    const w = el("div", "unitwarn fadein");
+    w.appendChild(el("span", "lb", "Figures nobody gave it"));
+    w.appendChild(el("span", "", ck.invented.map(x => QL + x + QR).join(", ") + ". These are the model's guesses, not facts. Do not quote them."));
+    body.appendChild(w);
+  }
+  if (ck && ck.repaired && !(ck.conflicts && ck.conflicts.length) && !(ck.invented && ck.invented.length)) {
     const n = el("div", "onlyhere fadein");
     n.appendChild(el("span", "lb", "Corrected"));
-    n.appendChild(el("span", "", "The first draft contradicted one of your saved facts, so it was rewritten and checked again."));
+    n.appendChild(el("span", "", "The first draft contradicted your saved facts or stated figures nobody gave it, so it was rewritten and checked again."));
     body.appendChild(n);
   }
 
@@ -4896,22 +5037,29 @@ async function run(text, useMode) {
       clearInterval(tint);
       tl.textContent = "Checking it against your facts";
       try { check = await checkCard(data, ws, text); } catch (e) { check = { ran:false, error: e.message || "" }; }
-      if (check.ran && check.conflicts.length) {
-        tl.textContent = "Fixing a contradiction";
-        const fixNote = NL + NL + "YOUR FIRST DRAFT CONTRADICTED THE USER'S SAVED FACTS. Rewrite the whole read so that nothing in it contradicts them:" + NL +
+      check.invented = numberAudit(data, ws, text);
+      const faults = ck => (ck.conflicts ? ck.conflicts.length : 0) + ck.invented.length;
+      if ((check.ran && check.conflicts.length) || check.invented.length) {
+        tl.textContent = check.invented.length ? "Taking out figures nobody gave it" : "Fixing a contradiction";
+        let fixNote = "";
+        if (check.ran && check.conflicts.length) fixNote += NL + NL + "YOUR FIRST DRAFT CONTRADICTED THE USER'S SAVED FACTS. Rewrite the whole read so that nothing in it contradicts them:" + NL +
           check.conflicts.map(x => "  • You wrote " + QL + x.card_quote + QR + ", but " + QL + x.fact_quote + QR + ". " + x.why).join(NL);
+        if (check.invented.length) fixNote += NL + NL + "YOUR FIRST DRAFT STATED FIGURES NOBODY GAVE YOU: " + check.invented.map(x => QL + x + QR).join(", ") +
+          ". Remove every one of them. Do not replace them with other numbers. Say it in words without a figure, such as " + QL + "a sizeable share" + QR +
+          " or " + QL + "well below your anchor" + QR + ", or add the unknown to evidence_gaps.";
         try {
           const again = await callGemini(S.key, sys + fixNote, text, buildSchema(mode), null, CARD);
           again.model_used = lastModel;
           normalise(again);
           let check2;
           try { check2 = await checkCard(again, ws, text); } catch (e) { check2 = { ran:false, error: e.message || "" }; }
+          check2.invented = numberAudit(again, ws, text);
           // Keep the rewrite only if it is genuinely better. A rewrite that cannot be
-          // checked, or still conflicts as badly, does not replace a checked card.
-          if (check2.ran && check2.conflicts.length < check.conflicts.length) {
+          // checked, or is no cleaner, does not replace a checked card.
+          if ((check2.ran || !check.ran) && faults(check2) < faults(check)) {
             data = again; check = check2; check.repaired = true;
           }
-        } catch (e) { /* the first card stands, with its conflicts shown */ }
+        } catch (e) { /* the first card stands, with its faults shown */ }
       }
       tl.textContent = TICKS[TICKS.length - 1];
     }
@@ -5764,7 +5912,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-10-23-a";
+const BUILD = "2026-10-23-b";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
@@ -7414,6 +7562,13 @@ async function runFollowUp(text, chat) {
     host.appendChild(e2);
     chat.turns.push({ role:"error", title:"That did not go through.", body:" " + (err.message || "") });
   } else {
+    // The same number audit as a card. Figures already on the card count as given,
+    // because any made up one there was flagged on the card itself.
+    if (S.key && out && out.answer) {
+      const cd = last.data || {};
+      const given = [lc.question, text, cardFlat(cd), (cd.numbers_used || []).map(n => n.value).join(" ")].join(NL);
+      out.invented = numberAudit({ headline: out.answer }, ws, given);
+    }
     chat.turns.push({ role:"reply", data:out });
     renderReply(host, out, text);
   }
@@ -7428,6 +7583,12 @@ function renderReply(host, out, q) {
   const b = BASIS[out.basis] || BASIS.MY_GENERAL_KNOWLEDGE;
   const box = el("div", "replybox fadein");
   box.appendChild(el("div", "replytxt", out.answer));
+  if (out.invented && out.invented.length) {
+    const w = el("div", "unitwarn");
+    w.appendChild(el("span", "lb", "Figures nobody gave it"));
+    w.appendChild(el("span", "", out.invented.map(x => QL + x + QR).join(", ") + ". Guesses, not facts."));
+    box.appendChild(w);
+  }
   const foot = el("div", "replyfoot");
   foot.appendChild(el("span", "rbasis " + b[0], b[1]));
   if (out.changes_the_read && !/^no change/i.test(out.changes_the_read.trim())) {
