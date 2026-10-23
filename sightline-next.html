@@ -5432,8 +5432,14 @@ async function readSpreadsheet(file, wsId) {
   try { XL = await loadSheetJS(); } catch (e) { toast(e.message); return; }
   let wb;
   try {
-    const buf = await file.arrayBuffer();
-    wb = XL.read(buf, { cellDates: true, dense: true });
+    /* A CSV is decoded as UTF-8 text first. Handed over as raw bytes, SheetJS read
+       it in an older code page and "₹11,500" arrived as three garbled characters
+       and a number it could not see, so the whole price column read as text. */
+    if (/\.(csv|txt)$/i.test(file.name) || /csv|text\/plain/i.test(file.type || "")) {
+      wb = XL.read(await file.text(), { type: "string", cellDates: true, dense: true });
+    } else {
+      wb = XL.read(await file.arrayBuffer(), { cellDates: true, dense: true });
+    }
   } catch (e) {
     toast("That file could not be read as a spreadsheet. Excel and CSV files work."); return;
   }
