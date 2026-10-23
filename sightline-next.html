@@ -1584,7 +1584,9 @@ const SLOTS = {
   },
   ourMove: {
     q: "What are you doing that they would react to?",
-    detect: has(/launch|price|enter|win|bid|introduc|announc|expand|acquir|partner/i),
+    // Also answered when the rival is the one moving: "Jindal will undercut us"
+    // already says who moved first, so asking what we did is a wasted question.
+    detect: has(/launch|price|enter|win|bid|introduc|announc|expand|acquir|partner|undercut|is offering|has opened|opened|offering|moved first|copied|copying/i),
     options: () => [
       opt("A price change", "Our move: a price change."),
       opt("A new system launch", "Our move: launching a new system."),
@@ -2617,11 +2619,24 @@ function workedFigures(text, ws) {
   const out = { lines: [], amounts: [] };
   const an = anchorAmount(ws);
   if (!an) return out;
+  /* Only for a percentage that moves a price. "LME jumps 15 percent" is a move in
+     the metal, which is only part of a system price, and handing the model
+     "15 percent of your anchor is 1,800" led it to raise the whole system price
+     by 15 percent. An input cost question gets no worked figures. */
+  const PRICEY = /price|pric(ed|ing)|discount|rebate|undercut|below|above|under us|cheaper|quote|rate|cut|raise|increase our|reduce our/i;
+  const INPUT = /\b(lme|alumin\w*|billet|metal|glass|energy|power|freight|steel|hardware cost|input|raw material)\b/i;
+  if (INPUT.test(text) && !PRICEY.test(String(text).replace(INPUT, ""))) return out;
   const pcts = [];
   const t = String(text || "");
-  t.replace(/(\d+(?:\.\d+)?)\s*(%|percent|per cent)/gi, (_, n) => { pcts.push(parseFloat(n)); return _; });
+  /* A percentage that describes a margin, a share or a growth rate is not a price
+     move. "Margins dropped from 18 to 11 percent" once became "your price drops
+     1,320 rupees", which is 11 percent of the anchor and means nothing. */
+  const NOT_PRICE = /margin|share|growth|volume|demand|utili[sz]|occupancy|interest|inflation|gst|duty|tax/i;
+  const near = i => t.slice(Math.max(0, i - 40), i);
+  t.replace(/(\d+(?:\.\d+)?)\s*(%|percent|per cent)/gi, (m, n, _u, i) => { if (!NOT_PRICE.test(near(i))) pcts.push(parseFloat(n)); return m; });
   Object.keys(NUMWORDS).forEach(w => {
-    if (new RegExp(WB + w + "\\s+(percent|per cent)", "i").test(t)) pcts.push(NUMWORDS[w]);
+    const m = new RegExp(WB + w + "\\s+(percent|per cent)", "i").exec(t);
+    if (m && !NOT_PRICE.test(near(m.index))) pcts.push(NUMWORDS[w]);
   });
   [...new Set(pcts)].filter(p => p > 0 && p < 100).slice(0, 3).forEach(p => {
     const d = an.n * p / 100;
@@ -2668,6 +2683,9 @@ HOW THIS INDUSTRY ACTUALLY WORKS. Reason with these, they are not decoration:
   systems at once. It is the actor most people forget, and usually the actor that decides.
 • Metal is priced globally on the LME. Nobody has cheaper aluminium. Undercutting comes from
   conversion cost, scale and thinner margin, never from cheaper metal.
+• Metal is only part of a system price, alongside conversion, hardware, engineering and margin. A
+  rise of some percentage in the metal is a much smaller rise in the system price, never the same
+  percentage. If you do not know the metal share, say so and list it in evidence_gaps.
 • Codes and standards (BIS, CBAM, fire, thermal) cut both ways: they block imports AND bind you.
 
 MODE: ${m.name}. ${m.desc}
@@ -3011,13 +3029,18 @@ function checkPrompt(ws) {
     "1. CONFLICTS. A sentence on the card that cannot be true if a saved fact or industry rule below is true. " +
     "Only real contradictions, not things the facts merely fail to mention." + NL +
     "2. UNSUPPORTED. A sentence on the card that states as fact something the user did not say and the facts do not " +
-    "support, and that the answer depends on. A clearly stated assumption or condition is fine and is NOT unsupported." + NL +
+    "support, and that the answer depends on. A clearly stated assumption or condition is fine and is NOT unsupported. " +
+    "A specific figure about a rival, the market or an outcome, such as a percentage, a count or a number of days, that " +
+    "nobody gave and that is not simple arithmetic on the user's own anchor IS unsupported." + NL +
     "3. UNANSWERED. Whether the card answers what the user actually asked. If they asked how much, whether, or what " +
-    "happens to something, and the card talks about something else, copy the words of their question it leaves unanswered." + NL + NL +
+    "happens to something, and the card talks about something else, copy the words of their question it leaves unanswered. " +
+    "A broad question such as " + QL + "what changes for us" + QR + " is answered by any card that says what changes for them. " +
+    "Only flag a question the card clearly sidesteps." + NL + NL +
     "Be strict but fair. Most cards have no conflicts. Report nothing rather than something weak." + NL + NL +
     "INDUSTRY RULES:" + NL +
     "R1. A system house sells profiles, hardware and engineering to fabricators. A fabricator sells the finished installed window. Different products at roughly three times different prices." + NL +
-    "R2. Metal is priced globally on the LME. Nobody has cheaper aluminium. Undercutting comes from conversion cost, scale and margin." + NL + NL +
+    "R2. Metal is priced globally on the LME. Nobody has cheaper aluminium. Undercutting comes from conversion cost, scale and margin." + NL +
+    "R3. Metal is only part of a system price. A rise of some percentage in metal is a much smaller rise in the system price, never the same percentage." + NL + NL +
     "THE USER'S COMPANY AND PRODUCT:" + NL + [c.company, c.product, c.anchor ? "Price anchor: " + c.anchor : ""].filter(Boolean).join(NL) + NL + NL +
     "HOW BUYING WORKS IN THEIR MARKET:" + NL + (behaviourLines(ws).join(NL) || "(not recorded)") + NL + NL +
     "SAVED FACTS:" + NL + (facts.join(NL) || "(none)");
