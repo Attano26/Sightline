@@ -1169,10 +1169,12 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .odcard .when{font-size:11px;font-weight:600;color:var(--ink-3)}
 .odcard .what{font-size:16px;font-weight:750;letter-spacing:-.028em;margin-top:2px;color:var(--ink)}
 .odcard .note{font-size:11px;color:var(--ink-2);margin-top:3px;line-height:1.35}
-/* Earlier stages recede by fading and stepping in, not by scaling, so the spine
-   and the dots on it stay on one line. */
-.od1{top:0;left:14px;right:14px;opacity:.7}
-.od2{top:92px;left:7px;right:7px;opacity:.86}
+/* Earlier stages recede by stepping in and a quieter heading, not by scaling,
+   which knocked the dots off the spine, and not by fading, which took the small
+   text below 4.5 to 1. */
+.od1{top:0;left:14px;right:14px;box-shadow:0 1px 2px rgba(16,24,64,.05)}
+.od2{top:92px;left:7px;right:7px;box-shadow:0 4px 14px -8px rgba(16,24,64,.22)}
+.od1 .what,.od2 .what{color:var(--ink-2)}
 .od3{top:184px}
 .od3 .what{color:var(--accent)}
 .odline{position:absolute;left:34px;top:36px;bottom:52px;width:2px;border-radius:2px;
@@ -1204,7 +1206,7 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .ovc .tag{font-size:11px;font-weight:700}
 .ovc .bars{display:flex;flex-direction:column;gap:5px}
 .ovc .bars b{height:6px;border-radius:3px;display:block}
-.ovdemo{opacity:.8}
+.ovdemo{border-style:dashed;box-shadow:none}
 .ovdemo .tag{color:var(--ink-3)}
 .ovdemo .bars b{background:var(--line)}
 .ovlive .tag{color:var(--accent)}
