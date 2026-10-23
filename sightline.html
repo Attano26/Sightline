@@ -1051,31 +1051,6 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 
 
 /* ---------- onboarding ---------- */
-.tspine{display:flex;flex-direction:column;gap:16px;width:100%;max-width:300px}
-.tnode{display:flex;align-items:center;gap:13px;position:relative}
-.tnode::before{content:"";position:absolute;left:5px;top:16px;bottom:-16px;width:2px;background:var(--line)}
-.tnode:last-child::before{display:none}
-.tdot{width:12px;height:12px;border-radius:50%;flex:0 0 auto;background:var(--surface);border:2px solid var(--ink-3);z-index:1}
-.tnode.n1 .tdot{border-color:var(--sev-med)}
-.tnode.n2 .tdot{border-color:var(--sev-high);background:var(--sev-high)}
-.tlabel{font-size:14.5px;font-weight:600;letter-spacing:-.016em}
-.tnode.n2 .tlabel{color:var(--sev-high)}
-.tpipe{display:flex;flex-direction:column;gap:11px;width:100%;max-width:320px}
-.tstep{display:flex;align-items:flex-start;gap:11px;text-align:left}
-.tnum{
-  width:20px;height:20px;border-radius:50%;flex:0 0 auto;margin-top:1px;
-  background:var(--ink);color:var(--surface);font-size:11px;font-weight:700;
-  display:flex;align-items:center;justify-content:center;
-}
-.tstext{display:flex;flex-direction:column;gap:1px;min-width:0}
-.tsk{font-size:14px;font-weight:600;letter-spacing:-.015em}
-.tsv{font-size:13px;color:var(--ink-2);line-height:1.4}
-
-/* Google asks that its button carry its own mark, and it reads as more
-   trustworthy than a plain button that happens to say Google. */
-.btn.google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%}
-.btn.google svg{flex:0 0 auto}
-.btn.google:disabled{opacity:.55;cursor:default}
 
 
 
@@ -1149,55 +1124,96 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 :root[data-theme="dark"] .onbart::after{box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .onbart::after{box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}}
 
-/* Shared stage for the gradient pieces. Everything is drawn relative to this box
-   so each one scales with the panel instead of needing its own breakpoints. */
-.onbstage{position:relative;width:min(74%,260px);aspect-ratio:1;display:grid;place-items:center}
-
-/* A torus. The conic sweep is the body, the radial mask punches the hole, and the
-   soft white blob on top is the light catching one side of it. */
-.oring{
-  position:absolute;inset:0;border-radius:50%;
-  background:conic-gradient(from 220deg,#EDEFF5,#C9D4F2 22%,#5B8DEF 46%,#2B5FD9 58%,#8FA9E8 72%,#EEF0F6 96%,#EDEFF5);
-  -webkit-mask:radial-gradient(circle,transparent 46%,#000 47%);
-  mask:radial-gradient(circle,transparent 46%,#000 47%);
-  filter:blur(.3px);
-}
-.oringlit{
-  position:absolute;width:34%;height:34%;right:4%;top:34%;border-radius:50%;
-  background:radial-gradient(circle at 40% 40%,rgba(255,255,255,.95),rgba(255,255,255,0) 68%);
-  filter:blur(6px);
-}
-
-/* Four point star. clip-path gives the silhouette, the gradient gives it depth,
-   and the copy behind it blurred out is the glow it would cast. */
-.ostar,.ostarglow{
-  position:absolute;width:74%;height:74%;
-  clip-path:polygon(50% 0%,58% 42%,100% 50%,58% 58%,50% 100%,42% 58%,0% 50%,42% 42%);
-}
-.ostar{background:linear-gradient(150deg,#7FE3F0 0%,#2E7BE8 42%,#1B37B8 78%,#0E1F7A 100%)}
-.ostarglow{background:#2E7BE8;filter:blur(26px);opacity:.55;transform:scale(1.12)}
-.oring2{
-  position:absolute;width:96%;height:96%;border-radius:50%;
-  border:1.5px solid rgba(140,160,200,.32);
-}
-
-/* An organic blob. Three offset radial gradients inside an asymmetric radius,
-   blurred hard, which reads as volume without being a render. */
-.oblob{
-  position:absolute;width:86%;height:86%;
-  border-radius:58% 42% 47% 53% / 43% 51% 49% 57%;
+/* The art is a miniature of the product itself, drawn on a fixed 262 by 280 stage
+   and scaled to the panel, so the four pictures never need breakpoints of their
+   own. The previous set was abstract shapes (a torus, a star, a blob), which the
+   user called boring and not premium: clip art standing in for ideas. */
+.onbstage{position:relative;width:262px;height:280px;flex:0 0 auto;transform-origin:center}
+/* Ambient light behind the stage. Blue on both themes, softer on dark. */
+.onbart::before{
+  content:"";position:absolute;width:150%;height:80%;left:-25%;top:8%;pointer-events:none;
   background:
-    radial-gradient(circle at 68% 30%,#5FA8FF 0%,transparent 52%),
-    radial-gradient(circle at 34% 66%,#1B2FD0 0%,transparent 56%),
-    radial-gradient(circle at 52% 48%,#2E5BE8 0%,#0B1B8C 74%);
-  filter:blur(9px);
-  animation:blobDrift 14s ease-in-out infinite;
+    radial-gradient(closest-side at 34% 40%,rgba(74,155,255,.38),transparent 72%),
+    radial-gradient(closest-side at 68% 58%,rgba(46,91,232,.26),transparent 70%),
+    radial-gradient(closest-side at 52% 22%,rgba(127,227,240,.30),transparent 68%);
+  filter:blur(26px);
 }
-@keyframes blobDrift{
-  0%,100%{border-radius:58% 42% 47% 53% / 43% 51% 49% 57%;transform:rotate(0deg)}
-  50%{border-radius:44% 56% 58% 42% / 55% 44% 56% 45%;transform:rotate(6deg)}
+:root[data-theme="dark"] .onbart::before{opacity:.55}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .onbart::before{opacity:.55}}
+
+/* A card on the stage. The app's own surface and line, so it holds in both themes. */
+.og{
+  position:absolute;background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  box-shadow:0 1px 2px rgba(16,24,64,.06),0 10px 26px -8px rgba(16,24,64,.28);
 }
-@media (prefers-reduced-motion:reduce){.oblob{animation:none}}
+
+/* 1. The reaction map: your move at the top, three reactions below it. */
+.omove{
+  position:absolute;left:50%;top:4px;transform:translateX(-50%);white-space:nowrap;
+  background:var(--ink);color:var(--paper);border-radius:12px;padding:9px 15px;
+  font-size:13px;font-weight:650;letter-spacing:-.012em;box-shadow:0 8px 22px -6px rgba(20,22,40,.5);
+}
+.omove small{display:block;font-size:11px;font-weight:600;opacity:.7;margin-bottom:2px}
+.owires{position:absolute;inset:0;color:var(--ink-3)}
+.oactor{padding:9px 11px;width:120px}
+.oactor .who{font-size:12px;font-weight:700;letter-spacing:-.012em;display:flex;align-items:center;gap:6px;color:var(--ink)}
+.oactor .who i{width:7px;height:7px;border-radius:50%;display:block;flex:0 0 auto}
+.oactor .did{font-size:11px;line-height:1.35;color:var(--ink-2);margin-top:3px}
+.oa1{left:-6px;top:116px}  .oa1 .who i{background:#4A9BFF}
+.oa2{right:-6px;top:102px} .oa2 .who i{background:#FF7A59}
+.oa3{left:50%;transform:translateX(-50%);top:206px;width:150px} .oa3 .who i{background:#2E5BE8}
+
+/* 2. The drift: the same move, three problems, each further off than the last. */
+.odrift{position:absolute;inset:0}
+.odcard{left:0;right:0;padding:12px 15px 12px 44px;border-radius:16px}
+.odcard .when{font-size:11px;font-weight:600;color:var(--ink-3)}
+.odcard .what{font-size:16px;font-weight:750;letter-spacing:-.028em;margin-top:2px;color:var(--ink)}
+.odcard .note{font-size:11px;color:var(--ink-2);margin-top:3px;line-height:1.35}
+/* Earlier stages recede by stepping in and a quieter heading, not by scaling,
+   which knocked the dots off the spine, and not by fading, which took the small
+   text below 4.5 to 1. */
+.od1{top:0;left:14px;right:14px;box-shadow:0 1px 2px rgba(16,24,64,.05)}
+.od2{top:92px;left:7px;right:7px;box-shadow:0 4px 14px -8px rgba(16,24,64,.22)}
+.od1 .what,.od2 .what{color:var(--ink-2)}
+.od3{top:184px}
+.od3 .what{color:var(--accent)}
+.odline{position:absolute;left:34px;top:36px;bottom:52px;width:2px;border-radius:2px;
+  background:linear-gradient(180deg,rgba(74,155,255,.25),#2E5BE8)}
+.odpip{position:absolute;left:16px;top:50%;margin-top:-6px;width:12px;height:12px;border-radius:50%;background:var(--surface);
+  box-shadow:0 0 0 2.5px #2E5BE8,0 2px 6px rgba(16,24,64,.2)}
+.od1 .odpip{left:15px}.od2 .odpip{left:22px}.od3 .odpip{left:29px}
+.od1{padding-left:38px}.od2{padding-left:45px}.od3{padding-left:52px}
+
+/* 3. The greeting, which fills in as the name is typed. */
+.ohalo{position:absolute;left:12px;top:21px;width:238px;height:238px;border-radius:50%;
+  background:conic-gradient(from 210deg,#7FE3F0,#4A9BFF 28%,#2E5BE8 52%,#0B1B6B 68%,#4A9BFF 88%,#7FE3F0);
+  filter:blur(16px);opacity:.6}
+.oringg{position:absolute;left:38px;top:47px;width:186px;height:186px;border-radius:50%;
+  background:var(--surface);opacity:.55;border:1px solid var(--line)}
+.ohello{left:50%;top:50%;transform:translate(-50%,-50%);padding:14px 20px;text-align:center;border-radius:16px;min-width:150px}
+.ohello .lb{font-size:11px;font-weight:600;color:var(--ink-3)}
+.ohello .nm{font-size:22px;font-weight:800;letter-spacing:-.032em;margin-top:2px;color:var(--ink);
+  max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ohello .nm.empty{color:var(--ink-3);font-weight:700}
+.ocursor{display:inline-block;width:2px;height:20px;background:var(--accent);vertical-align:-3px;margin-left:2px;border-radius:1px;
+  animation:oblink 1.1s steps(1) infinite}
+@keyframes oblink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.ocursor{animation:none}}
+
+/* 4. Demo against live. */
+.ovs{position:absolute;left:6px;right:6px;top:70px;display:flex;gap:11px}
+.ovc{position:relative;flex:1;padding:13px;border-radius:15px;display:flex;flex-direction:column;gap:8px;min-height:140px}
+.ovc .tag{font-size:11px;font-weight:700}
+.ovc .bars{display:flex;flex-direction:column;gap:5px}
+.ovc .bars b{height:6px;border-radius:3px;display:block}
+.ovdemo{border-style:dashed;box-shadow:none}
+.ovdemo .tag{color:var(--ink-3)}
+.ovdemo .bars b{background:var(--line)}
+.ovlive .tag{color:var(--accent)}
+.ovlive .bars b{background:linear-gradient(90deg,#2E5BE8,#4A9BFF)}
+.ovc .vfoot{font-size:11px;color:var(--ink-2);line-height:1.35;margin-top:auto}
+.ovlive .vfoot{color:var(--ink)}
+.ovlive .vfoot b{font-weight:700}
 
 /* Headline. Two weights of the same size: the phrase that carries the point in
    full ink, the connective words behind it. This is the one detail that makes a
@@ -1242,7 +1258,6 @@ details.gaps summary .tw{transition:transform .2s;display:inline-block;color:var
 .onbbtn.ghost:hover{color:var(--ink);transform:none;box-shadow:none}
 .onbbtn.dark{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .onbbtn:disabled{opacity:.5;cursor:default;transform:none;box-shadow:var(--sh-1)}
-.onbbtn.g{display:flex;align-items:center;justify-content:center;gap:10px}
 
 /* Short phones: the art is the first thing to give up space, then it goes. */
 @media (max-height:680px){
@@ -5602,94 +5617,97 @@ function xlPaint(st) {
 
    Everything is skippable. None of it is required to use the app.
    ------------------------------------------------------------ */
+/* Four screens, built from the proposal approved on 23 October 2026
+   (docs/onboarding/onboarding-preview.html). Seven became four: Google sign in
+   moved to Settings, and workspace setup, the clarify explainer and the pipeline
+   explainer went, because they are discoveries for the first real simulation,
+   not homework before it. The fastest path to a first answer is name, key, go. */
 const TOUR = [
-  { kind:"say", tag:"What this is", art:"ring",
-    title:[["Meet the", 1], ["market", 0], ["you are about to move", 1]],
-    body:"Describe something you are considering. A price, a launch, a tender, a competitor, a cost shock, a code change. It works out who reacts, what they do about it, and what that turns into a few months later." },
+  { kind:"say", tag:"What it does", art:"map",
+    title:[["Know who reacts", 0], ["before you move", 1]],
+    body:"Describe a price, a launch, a tender or a cost shock. It works out who responds, what they actually do, and what that costs you." },
 
-  { kind:"name", tag:"First, your name", art:"blob",
-    title:[["What should it", 1], ["call you?", 0]],
-    body:"Used to greet you here and to sign anything you export. It is never sent to the model, and you can change it in Settings whenever you like." },
+  { kind:"say", tag:"The one idea", art:"drift",
+    title:[["It ends", 0], ["somewhere else entirely", 1]],
+    body:"Every answer plays out over three moves. A chatbot stops at the first one, which is almost never the one that costs you." },
 
-  { kind:"say", tag:"How to read an answer", art:"spine",
-    title:[["The end is rarely", 1], ["the same problem", 0], ["as the start", 1]],
-    body:"A price cut looks like a margin problem on day one. A quarter later it is a channel problem. A year later it is a specification problem. That drift is the thing worth seeing, and a single answer from a chatbot stops at the first one." },
+  { kind:"name", tag:"Your name", art:"hello",
+    title:[["What should we", 0], ["call you?", 1]],
+    body:"Only to greet you here and to sign what you export. It is never sent to the model." },
 
-  { kind:"say", tag:"What happens when you ask", art:"pipeline",
-    title:[["Four steps,", 0], ["every time", 1]],
-    body:"It works out what kind of decision this is, asks about anything important you left out rather than guessing, runs the reaction against your market, and hands back an answer shaped for that decision." },
-
-  { kind:"signin", tag:"Optional", art:"star",
-    title:[["Keep your work on", 1], ["every device", 0]],
-    body:"Your workspaces, simulations and saved signals live in your own Google Drive, in one file this app creates. It can touch that file and nothing else of yours." },
-
-  { kind:"key", tag:"Optional, and nearly free", art:"blob",
-    title:[["Add a key to", 1], ["run it for real", 0]],
-    body:"Without one you are in demo mode, which replays prepared examples and says so on every card. With one, every answer is worked out from your own context. It never searches the web, so a simulation costs a fraction of a rupee." },
-
-  { kind:"context", tag:"Last thing", art:"ring",
-    title:[["Tell it", 1], ["who you are", 0]],
-    body:"Your company, your market and your real competitors are what separate an answer about you from an answer about any company anywhere. This matters more than the key does." }
+  { kind:"key", tag:"Your key", art:"vs",
+    title:[["Run it", 0], ["for real", 1]],
+    body:"Paste a free Gemini key, or skip and look around first. It never searches the web, so a simulation costs a fraction of a rupee." }
 ];
 
-/* Gradient art, built from the app's own palette rather than the reference's, so
-   this reads as the same product and not as a borrowed screen. */
+/* The art is a miniature of the real product rather than a shape standing in for
+   an idea. Screen one is a reaction map with real actor names, screen two the
+   three stage drift every card shows. Built as markup on the app's own tokens, so
+   it follows the theme. */
 function onbArt(kind) {
   const st = el("div", "onbstage");
-  if (kind === "ring") {
-    st.appendChild(el("div", "oring"));
-    st.appendChild(el("div", "oringlit"));
-  } else if (kind === "star") {
-    st.appendChild(el("div", "ostarglow"));
-    st.appendChild(el("div", "oring2"));
-    st.appendChild(el("div", "ostar"));
-  } else if (kind === "blob") {
-    st.appendChild(el("div", "oblob"));
-  } else if (kind === "spine") {
-    const sp = el("div", "tspine");
-    ["What happens first", "What that sets off", "Where it ends up"].forEach((n, i) => {
-      const row = el("div", "tnode n" + i);
-      row.appendChild(el("span", "tdot"));
-      row.appendChild(el("span", "tlabel", n));
-      sp.appendChild(row);
-    });
-    st.style.width = "min(84%,300px)"; st.style.aspectRatio = "auto";
-    st.appendChild(sp);
-  } else if (kind === "pipeline") {
-    const p = el("div", "tpipe");
-    [["Reads", "what kind of decision this is"],
-     ["Asks", "anything important you left out"],
-     ["Runs", "the reaction, using your market"],
-     ["Hands back", "an answer shaped for that decision"]].forEach((x, i) => {
-      const row = el("div", "tstep");
-      row.appendChild(el("span", "tnum", String(i + 1)));
-      const t = el("div", "tstext");
-      t.appendChild(el("span", "tsk", x[0]));
-      t.appendChild(el("span", "tsv", x[1]));
-      row.appendChild(t);
-      p.appendChild(row);
-    });
-    st.style.width = "min(88%,320px)"; st.style.aspectRatio = "auto";
-    st.appendChild(p);
+  const card = (cls, parts) => { const c = el("div", "og " + cls); parts.forEach(p => c.appendChild(p)); return c; };
+  if (kind === "map") {
+    const mv = el("div", "omove"); mv.appendChild(el("small", "", "Your move")); mv.appendChild(document.createTextNode("Raise our price by eight percent"));
+    st.appendChild(mv);
+    const w = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    w.setAttribute("class", "owires"); w.setAttribute("viewBox", "0 0 262 280"); w.setAttribute("fill", "none");
+    w.innerHTML = '<path d="M131 50 C 131 94, 74 98, 58 118" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>' +
+      '<path d="M131 50 C 131 90, 190 90, 204 104" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>' +
+      '<path d="M131 50 C 131 140, 131 168, 131 206" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="3 4"/>';
+    st.appendChild(w);
+    const actor = (cls, who, did) => { const h = el("div", "who"); h.appendChild(el("i")); h.appendChild(document.createTextNode(who)); return card("oactor " + cls, [h, el("div", "did", did)]); };
+    st.appendChild(actor("oa1", "Fabricator", "Holds quotes, waits to see if it sticks"));
+    st.appendChild(actor("oa2", "Reynaers", "Does not follow. Targets your two biggest accounts"));
+    st.appendChild(actor("oa3", "The specification", "Consultant writes performance, not brand"));
+  } else if (kind === "drift") {
+    const d = el("div", "odrift");
+    d.appendChild(el("div", "odline"));
+    [["od1", "Week one", "A margin problem", "You are up eight percent, nobody has moved"],
+     ["od2", "A quarter later", "A channel problem", "Two fabricators quietly dual source"],
+     ["od3", "A year later", "A specification problem", "Consultants write you out by performance"]].forEach(([c, a, b, n]) =>
+      d.appendChild(card("odcard " + c, [el("div", "odpip"), el("div", "when", a), el("div", "what", b), el("div", "note", n)])));
+    st.appendChild(d);
+  } else if (kind === "hello") {
+    st.appendChild(el("div", "ohalo"));
+    st.appendChild(el("div", "oringg"));
+    const nm = el("div", "nm"); nm.id = "onbHelloName";
+    st.appendChild(card("ohello", [el("div", "lb", "Hello"), nm]));
+    paintHelloName(nm);
+  } else if (kind === "vs") {
+    const bars = ws => { const b = el("div", "bars"); ws.forEach(x => { const i = el("b"); i.style.width = x + "%"; b.appendChild(i); }); return b; };
+    const foot = html => { const f = el("div", "vfoot"); f.innerHTML = html; return f; };
+    const v = el("div", "ovs");
+    const demo = card("ovc ovdemo", [el("div", "tag", "Without a key"), bars([100, 78, 88, 54]), foot("Prepared examples. Every card says so.")]);
+    const live = card("ovc ovlive", [el("div", "tag", "With a key"), bars([100, 84, 92, 66]), foot("Worked out from <b>your</b> market. Under a rupee.")]);
+    demo.style.position = live.style.position = "relative";
+    v.appendChild(demo); v.appendChild(live);
+    st.appendChild(v);
   }
   return st;
 }
 
-/* Google's own mark, so the button reads as a Google button rather than as a
-   button that happens to mention Google. */
-function googleMark() {
-  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  s.setAttribute("viewBox", "0 0 48 48");
-  s.setAttribute("width", "18"); s.setAttribute("height", "18");
-  s.innerHTML =
-    '<path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.4 6.6v5.5h7.1c4.2-3.8 6.6-9.5 6.6-16.1z"/>' +
-    '<path fill="#34A853" d="M24 46c6 0 11-2 14.5-5.4l-7.1-5.5c-2 1.3-4.5 2.1-7.4 2.1-5.7 0-10.6-3.9-12.3-9.1H4.3v5.7C7.8 41.1 15.3 46 24 46z"/>' +
-    '<path fill="#FBBC05" d="M11.7 28.1c-.4-1.3-.7-2.7-.7-4.1s.2-2.8.7-4.1v-5.7H4.3C2.8 17.1 2 20.5 2 24s.8 6.9 2.3 9.8l7.4-5.7z"/>' +
-    '<path fill="#EA4335" d="M24 10.8c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 4.2 30 2 24 2 15.3 2 7.8 6.9 4.3 14.2l7.4 5.7c1.7-5.2 6.6-9.1 12.3-9.1z"/>';
-  return s;
+/* The greeting card on screen three fills in as the name is typed. */
+function paintHelloName(nm) {
+  nm = nm || $("#onbHelloName");
+  if (!nm) return;
+  const n = (S.userName || "").trim();
+  nm.textContent = n || "Your name";
+  nm.classList.toggle("empty", !n);
+  nm.appendChild(el("span", "ocursor"));
 }
 
-const closeTour = () => { const o = $("#onb"); o.hidden = true; o.innerHTML = ""; };
+/* Fit the fixed stage to whatever room the panel has. The words take their space
+   first and the picture shrinks into what is left, never the other way round. */
+function fitOnbStage(art) {
+  const st = art.querySelector(".onbstage");
+  if (!st) return;
+  const s = Math.min(1.15, (art.clientWidth - 24) / 262, (art.clientHeight - 24) / 280);
+  st.style.transform = "scale(" + Math.max(0.3, s) + ")";
+}
+
+let onbRO = null;
+const closeTour = () => { const o = $("#onb"); o.hidden = true; o.innerHTML = ""; if (onbRO) { onbRO.disconnect(); onbRO = null; } };
 
 function openTour(startAt) {
   let i = startAt || 0;
@@ -5715,6 +5733,9 @@ function openTour(startAt) {
     const art = el("div", "onbart");
     art.appendChild(onbArt(step.art));
     wrap.appendChild(art);
+    // Fitted at the end of paint, once the footer is in and the panel has its real
+    // height, and again whenever the panel changes size.
+    if (window.ResizeObserver) { if (onbRO) onbRO.disconnect(); onbRO = new ResizeObserver(() => fitOnbStage(art)); onbRO.observe(art); }
 
     const foot = el("div", "onbfoot");
     const h = el("h2", "onbttl");
@@ -5727,9 +5748,7 @@ function openTour(startAt) {
     foot.appendChild(el("p", "onbbody", step.body));
 
     if (step.kind === "name") stepName(foot);
-    if (step.kind === "signin") stepSignIn(foot);
     if (step.kind === "key") stepKey(foot);
-    if (step.kind === "context") stepContext(foot);
 
     const dots = el("div", "onbdots");
     TOUR.forEach((_, n) => {
@@ -5743,12 +5762,13 @@ function openTour(startAt) {
     const act = el("div", "onbact");
     if (i > 0) { const b = el("button", "onbbtn ghost", "Back"); b.onclick = () => go(i - 1); act.appendChild(b); }
     const last = i === TOUR.length - 1;
-    const nx = el("button", "onbbtn" + (last ? " dark" : ""), last ? "Start using it" : "Continue");
+    const nx = el("button", "onbbtn dark", last ? "Start" : "Continue");
     nx.onclick = last ? finish : () => go(i + 1);
     act.appendChild(nx);
     foot.appendChild(act);
 
     wrap.appendChild(foot);
+    fitOnbStage(art);
   }
 
   function stepName(foot) {
@@ -5756,53 +5776,11 @@ function openTour(startAt) {
     const inp = el("input");
     inp.placeholder = "Your first name is plenty";
     inp.value = S.userName || "";
-    inp.oninput = () => { S.userName = inp.value.slice(0, 40); save(); };
+    inp.oninput = () => { S.userName = inp.value.slice(0, 40); save(); paintHelloName(); };
     inp.onkeydown = e => { if (e.key === "Enter" && i < TOUR.length - 1) go(i + 1); };
     f.appendChild(inp);
     foot.appendChild(f);
     setTimeout(() => inp.focus(), 120);
-  }
-
-  function stepSignIn(foot) {
-    const f = el("div", "onbfld");
-    const g = gsync();
-    const canSync = location.protocol === "https:" || location.hostname === "localhost";
-
-    if (!canSync || !clientId()) {
-      f.appendChild(el("div", "hint", !canSync
-        ? "Google will not accept a sign in from a file opened directly, or from a preview pane. Open the hosted version and this appears."
-        : "Sign in is not set up for this copy of the app. Everything else works, and your data stays on this device."));
-      foot.appendChild(f); return;
-    }
-
-    const st = el("div", "hint");
-    const b = el("button", "onbbtn g" + (g.token ? "" : " dark"));
-    b.appendChild(googleMark());
-    const lbl = el("span", "", g.token ? "Signed in" : "Continue with Google");
-    b.appendChild(lbl);
-    b.disabled = !!g.token;
-    if (g.token) st.textContent = "Signed in. Your work is being kept in your Drive.";
-    else st.innerHTML = "It asks for one permission: to manage the single file it creates. It cannot see anything else in your Drive.";
-    b.onclick = async () => {
-      b.disabled = true; lbl.textContent = "Waiting for Google…";
-      try {
-        await gEnsureToken();
-        const r = await gSync();
-        // A returning person's data comes back right here, which is the whole
-        // reason sign in sits before the two screens that ask them to type.
-        if (r.did === "pulled") { st.textContent = "Signed in, and your existing work came back."; renderRail(); renderStream(); }
-        else if (r.did === "conflict") st.textContent = "Signed in. There are two versions of your data, so Settings will ask which to keep.";
-        else st.textContent = "Signed in. Everything from here on is kept in your Drive.";
-        setSyncBadge("ok");
-        lbl.textContent = "Signed in";
-      } catch (e) {
-        const msg = e.message || "Unknown error";
-        st.innerHTML = esc(msg) + signInHelp(msg);
-        b.disabled = false; lbl.textContent = "Try again";
-      }
-    };
-    f.appendChild(b); f.appendChild(st);
-    foot.appendChild(f);
   }
 
   function stepKey(foot) {
@@ -5820,19 +5798,6 @@ function openTour(startAt) {
     inp.oninput = () => { S.key = inp.value.trim(); save(); say(); };
     say();
     f.appendChild(inp); f.appendChild(st);
-    foot.appendChild(f);
-  }
-
-  function stepContext(foot) {
-    const ws = activeWs();
-    const missing = ctxMissing(ws);
-    const f = el("div", "onbfld");
-    const b = el("button", "onbbtn", missing.length ? "Set up my workspace" : "Review my workspace");
-    b.onclick = () => { S.tourDone = true; save(); closeTour(); renderRail(); renderStream(); openWorkspace(ws.id); };
-    f.appendChild(b);
-    f.appendChild(el("div", "hint", missing.length
-      ? "Still blank: " + esc(missing.join(", ")).toLowerCase() + ". It starts filled in for Schüco India as a worked example, so change it to yours."
-      : "Filled in for Schüco India as a worked example. Change it to yours, or start a fresh workspace from the sidebar."));
     foot.appendChild(f);
   }
 
@@ -6290,7 +6255,7 @@ function applyProfile(ws, id, md) {
 /* Bumped with the service worker on every deploy, and shown in Settings, About.
    It is the only way to tell a bug in the new version from an old version still
    sitting in a cache. */
-const BUILD = "2026-10-23-c";
+const BUILD = "2026-10-23-d";
 
 const APP_CLIENT_ID = "338257030150-3tinoqpdmraqero5svhvk38dab1tqn81.apps.googleusercontent.com";
 
